@@ -12,6 +12,11 @@
 
 :443 {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
+	# One canonical host (cookies, SEO): www -> apex.
+	@www host www.pixcherry.com
+	redir @www https://pixcherry.com{uri} permanent
+
 	encode zstd gzip
 
 	@static path /_next/static/*

@@ -44,6 +44,8 @@ if ! command -v rclone >/dev/null || rclone version | head -1 | grep -q 'v1\.[0-
   rm -f /tmp/rclone.deb
 fi
 
+# The log dir is created above, before Caddy exists; Caddy must own it.
+chown -R caddy:caddy /var/log/caddy
 if [ -e $APP/current/deploy/Caddyfile ] && [ -e /etc/caddy/certs/origin.pem ]; then
   install -m 644 $APP/current/deploy/Caddyfile /etc/caddy/Caddyfile
   chgrp caddy /etc/caddy/certs /etc/caddy/certs/* && chmod 750 /etc/caddy/certs && chmod 640 /etc/caddy/certs/*
