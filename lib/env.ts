@@ -3,7 +3,7 @@
 
 export const APP_URL = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 export const IMG_URL = (process.env.IMG_URL ?? `${APP_URL}/api/dev-storage`).replace(/\/$/, "");
-export const APP_NAME = "EventSnap";
+export const APP_NAME = "PixCherry";
 export const TZ = "Asia/Kuala_Lumpur";
 
 export function secret(name: "SESSION_SECRET" | "CRON_SECRET") {

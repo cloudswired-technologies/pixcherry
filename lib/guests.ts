@@ -10,7 +10,7 @@ import { clientIp } from "@/lib/rate-limit";
 
 export type Guest = { id: string; event_id: string; name: string | null; upload_count: number; is_blocked: boolean };
 
-const cookieName = (eventId: string) => `esg_${eventId.slice(0, 8)}`;
+const cookieName = (eventId: string) => `pcg_${eventId.slice(0, 8)}`;
 type GuestCookie = { g: string; e: string; t: string };
 
 export async function currentGuest(eventId: string): Promise<Guest | null> {

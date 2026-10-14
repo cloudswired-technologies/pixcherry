@@ -3,7 +3,7 @@ import { Logo } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { AdminNav } from "./admin-nav";
 
-export const metadata = { title: { default: "Admin", template: "%s · Admin · EventSnap" } };
+export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" } };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();

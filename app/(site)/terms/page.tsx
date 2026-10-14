@@ -8,7 +8,7 @@ export default function Terms() {
     <LegalPage
       title="Terms of use"
       sections={[
-        ["The service", "EventSnap is operated by Cloudswired Technologies, Johor, Malaysia. Organisers create an event gallery; guests upload photos to it through a link or QR code."],
+        ["The service", "PixCherry is operated by Cloudswired Technologies, Johor, Malaysia. Organisers create an event gallery; guests upload photos to it through a link or QR code."],
         ["Payment", "Each event is paid once, by the package chosen at checkout. Prices are in Malaysian Ringgit. Upgrades and add-ons are charged separately. Payments are processed by CHIP."],
         ["Storage and deletion", "Photos are kept for the storage period of the event's package, counted from the end of the event, and then deleted permanently. The deletion date is shown on the event page and we email the organiser before it. Download the album before that date; deleted photos cannot be recovered."],
         ["Your content", "Organisers and guests keep the rights to their photos. By uploading, guests let the organiser and other people with the event link view and download them. Organisers are responsible for the event and may remove any photo."],

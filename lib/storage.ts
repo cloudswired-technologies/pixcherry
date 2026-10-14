@@ -28,11 +28,11 @@ const BUCKET = process.env.R2_BUCKET ?? "";
 export const LOCAL_ROOT = resolve(process.env.LOCAL_STORAGE_DIR ?? ".local-storage");
 
 declare global {
-  var __eventsnapS3: S3Client | undefined;
+  var __pixcherryS3: S3Client | undefined;
 }
 
 function s3() {
-  globalThis.__eventsnapS3 ??= new S3Client({
+  globalThis.__pixcherryS3 ??= new S3Client({
     region: "auto",
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "", secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "" },
@@ -40,7 +40,7 @@ function s3() {
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
-  return globalThis.__eventsnapS3;
+  return globalThis.__pixcherryS3;
 }
 
 export function publicUrl(key: string, version?: string | number) {

@@ -1,4 +1,4 @@
-# EventSnap on the VPS. Cloudflare terminates visitor TLS; Caddy terminates the
+# PixCherry on the VPS. Cloudflare terminates visitor TLS; Caddy terminates the
 # Cloudflare -> origin leg with a Cloudflare Origin CA certificate and forwards
 # to Next.js. Photos never pass through here: browsers upload straight to R2
 # and images are served from img.<domain> (R2 custom domain).
@@ -32,7 +32,7 @@
 	}
 
 	log {
-		output file /var/log/caddy/eventsnap.log {
+		output file /var/log/caddy/pixcherry.log {
 			roll_size 20MiB
 			roll_keep 5
 		}

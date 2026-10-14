@@ -1,14 +1,14 @@
 [Unit]
-Description=EventSnap web (Next.js standalone server)
+Description=PixCherry web (Next.js standalone server)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=eventsnap
-Group=eventsnap
-WorkingDirectory=/home/eventsnap/app/current
-EnvironmentFile=/home/eventsnap/app/.env
+User=pixcherry
+Group=pixcherry
+WorkingDirectory=/home/pixcherry/app/current
+EnvironmentFile=/home/pixcherry/app/.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
 # Not 127.0.0.1 (Next turns it into "localhost" and proxy rewrites break).
@@ -22,7 +22,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/home/eventsnap/app
+ReadWritePaths=/home/pixcherry/app
 
 [Install]
 WantedBy=multi-user.target

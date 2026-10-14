@@ -155,7 +155,7 @@ export async function applyPaid(purchaseId: string, chipId: string | null) {
     }>("select * from purchases where id = $1 for update", [purchaseId], c);
     if (!p || p.status === "paid") return null;
     const receipt = await one<{ no: string }>(
-      "select 'ES' || to_char(now() at time zone 'Asia/Kuala_Lumpur', 'YYYY') || '-' || lpad(nextval('receipt_seq')::text, 5, '0') as no",
+      "select 'PC' || to_char(now() at time zone 'Asia/Kuala_Lumpur', 'YYYY') || '-' || lpad(nextval('receipt_seq')::text, 5, '0') as no",
       [],
       c,
     );

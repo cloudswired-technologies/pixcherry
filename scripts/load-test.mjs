@@ -48,7 +48,7 @@ for (let e = 0; e < EVENTS; e++) {
     const { rows: [row] } = await db.query("insert into guests (event_id, name, token_hash) values ($1, $2, $3) returning id", [
       ev.id, `Guest ${g}`, createHash("sha256").update(t).digest("hex"),
     ]);
-    guests.push({ slug, cookie: `esg_${ev.id.slice(0, 8)}=${sign({ g: row.id, e: ev.id, t })}` });
+    guests.push({ slug, cookie: `pcg_${ev.id.slice(0, 8)}=${sign({ g: row.id, e: ev.id, t })}` });
   }
 }
 

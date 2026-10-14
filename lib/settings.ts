@@ -14,7 +14,7 @@ export type Settings = {
 const DEFAULTS: Settings = {
   warn_days_before_delete: 3,
   upload_rate_per_minute: 30,
-  company: { name: "Cloudswired Technologies", address: "Johor, Malaysia", email: "support@eventsnap.my", reg_no: "" },
+  company: { name: "Cloudswired Technologies", address: "Johor, Malaysia", email: "support@pixcherry.com", reg_no: "" },
 };
 
 export async function getSettings(): Promise<Settings> {

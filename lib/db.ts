@@ -5,7 +5,7 @@ import pg from "pg";
 // embedded Postgres locally (scripts/local-db.mjs).
 
 declare global {
-  var __eventsnapPool: pg.Pool | undefined;
+  var __pixcherryPool: pg.Pool | undefined;
 }
 
 function makePool() {
@@ -24,8 +24,8 @@ function makePool() {
 }
 
 export function pool() {
-  globalThis.__eventsnapPool ??= makePool();
-  return globalThis.__eventsnapPool;
+  globalThis.__pixcherryPool ??= makePool();
+  return globalThis.__pixcherryPool;
 }
 
 export type Queryable = Pick<pg.PoolClient, "query">;

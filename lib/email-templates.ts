@@ -7,7 +7,7 @@ function layout(heading: string, paragraphs: string[], button?: { label: string;
   const html = `<!doctype html><html><body style="margin:0;background:#f6f3ef;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden">
-<tr><td style="background:#1c1917;color:#ffffff;padding:18px 24px;font-size:16px;font-weight:bold">EventSnap</td></tr>
+<tr><td style="background:#1c1917;color:#ffffff;padding:18px 24px;font-size:16px;font-weight:bold">PixCherry</td></tr>
 <tr><td style="padding:24px">
 <h1 style="margin:0 0 12px;font-size:20px">${esc(heading)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5">${esc(p)}</p>`).join("")}
@@ -20,9 +20,9 @@ ${button ? `<p style="margin:20px 0"><a href="${esc(button.url)}" style="backgro
 export function codeEmail(code: string, minutes: number) {
   return layout(
     `Your login code: ${code}`,
-    [`Enter this code to sign in to EventSnap. It expires in ${minutes} minutes.`, "If you didn't ask for it, you can ignore this email."],
+    [`Enter this code to sign in to PixCherry. It expires in ${minutes} minutes.`, "If you didn't ask for it, you can ignore this email."],
     undefined,
-    `${code} is your EventSnap login code`,
+    `${code} is your PixCherry login code`,
   );
 }
 
@@ -49,6 +49,6 @@ export function deletionWarningEmail(p: { eventName: string; deletionAt: Date; e
 export function deletedEmail(p: { eventName: string }) {
   return layout(`"${p.eventName}" photos were deleted`, [
     "The storage period for this event has ended and its photos have been deleted permanently.",
-    "Thank you for using EventSnap. We'd love to help with your next event.",
+    "Thank you for using PixCherry. We'd love to help with your next event.",
   ]);
 }

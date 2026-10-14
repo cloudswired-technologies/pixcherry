@@ -8,7 +8,7 @@ export type Email = { to: string; subject: string; html: string; text: string; t
 
 export async function sendEmail(email: Email): Promise<boolean> {
   const token = process.env.ZEPTOMAIL_TOKEN;
-  const from = process.env.EMAIL_FROM ?? "no-reply@eventsnap.my";
+  const from = process.env.EMAIL_FROM ?? "no-reply@pixcherry.com";
   let ok = false;
   let error: string | null = null;
   if (!token) {
@@ -25,7 +25,7 @@ export async function sendEmail(email: Email): Promise<boolean> {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          from: { address: from, name: "EventSnap" },
+          from: { address: from, name: "PixCherry" },
           to: [{ email_address: { address: email.to } }],
           subject: email.subject,
           htmlbody: email.html,

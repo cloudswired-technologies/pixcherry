@@ -7,7 +7,7 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
       <div className="container-page flex h-16 items-center justify-between gap-3">
-        <Link href="/" aria-label="EventSnap home">
+        <Link href="/" aria-label="PixCherry home">
           <Logo className="text-lg" />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">

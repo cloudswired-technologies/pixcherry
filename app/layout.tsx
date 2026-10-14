@@ -7,7 +7,7 @@ const font = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", display: 
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
-  title: { default: "EventSnap — Everyone's photos. One event album.", template: "%s · EventSnap" },
+  title: { default: "PixCherry — Everyone's photos. One event album.", template: "%s · PixCherry" },
   description: "Put one QR code at your wedding or event. Guests scan, snap and upload. Everyone's photos come together in one shared gallery.",
 };
 

@@ -1,7 +1,7 @@
 // Local Postgres for development and tests (no Docker needed).
 //   node scripts/local-db.mjs        -> starts on port 54329, Ctrl+C to stop
 // Data lives in .local-db/ (gitignored). DATABASE_URL for .env.local:
-//   postgres://postgres:postgres@127.0.0.1:54329/eventsnap
+//   postgres://postgres:postgres@127.0.0.1:54329/pixcherry
 import EmbeddedPostgres from "embedded-postgres";
 import { existsSync } from "node:fs";
 
@@ -20,14 +20,14 @@ const fresh = !existsSync(`${dir}/PG_VERSION`);
 if (fresh) await pg.initialise();
 await pg.start();
 if (fresh) {
-  await pg.createDatabase("eventsnap");
+  await pg.createDatabase("pixcherry");
   // Same API roles as Supabase, so migrations behave identically.
-  const c = pg.getPgClient("eventsnap");
+  const c = pg.getPgClient("pixcherry");
   await c.connect();
   await c.query("create role anon nologin; create role authenticated nologin;");
   await c.end();
 }
-console.log("local postgres ready: postgres://postgres:postgres@127.0.0.1:54329/eventsnap");
+console.log("local postgres ready: postgres://postgres:postgres@127.0.0.1:54329/pixcherry");
 
 const stop = async () => {
   await pg.stop();

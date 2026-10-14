@@ -1,4 +1,4 @@
--- EventSnap schema. All access goes through the Next.js server / worker with a
+-- PixCherry schema. All access goes through the Next.js server / worker with a
 -- privileged role; anon/authenticated (Supabase API roles) get nothing.
 
 create extension if not exists pgcrypto;
@@ -258,4 +258,4 @@ insert into plan_addons (kind, name, amount, price_cents, sort) values
 insert into settings (key, value) values
   ('warn_days_before_delete', '3'),
   ('upload_rate_per_minute', '30'),
-  ('company', '{"name":"Cloudswired Technologies","address":"Johor, Malaysia","email":"support@eventsnap.my","reg_no":""}');
+  ('company', '{"name":"Cloudswired Technologies","address":"Johor, Malaysia","email":"support@pixcherry.com","reg_no":""}');

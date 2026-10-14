@@ -24,7 +24,7 @@ export const LIMITS: { key: LimitKey; label: string; help: string; min: number; 
 export const FEATURES: { key: FeatureKey; label: string; help: string; pricing: string }[] = [
   { key: "guest_album_download", label: "Guests can download the whole album", help: "Otherwise only the organiser can download the ZIP. Guests can always save single photos.", pricing: "Guests can download the full album" },
   { key: "custom_branding", label: "Custom branding", help: "Organiser can set an accent colour and logo on the guest page.", pricing: "Your colours and logo" },
-  { key: "hide_powered_by", label: "Hide \"Powered by EventSnap\"", help: "Removes the EventSnap footer from the guest page.", pricing: "No EventSnap branding" },
+  { key: "hide_powered_by", label: "Hide \"Powered by PixCherry\"", help: "Removes the PixCherry footer from the guest page.", pricing: "No PixCherry branding" },
   { key: "moderation", label: "Photo approval", help: "Organiser can choose to approve photos before guests see them.", pricing: "Approve photos before they show" },
   { key: "slideshow", label: "Live slideshow", help: "Full-screen slideshow page for a projector or TV.", pricing: "Live slideshow for the big screen" },
 ];

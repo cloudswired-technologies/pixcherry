@@ -1,6 +1,6 @@
-# EventSnap — Decisions
+# PixCherry — Decisions
 
-Agreed with Shukry on 2026-10-14. `EventSnap_MVP_Spec.md` is the product brief; this file records how it is built.
+Agreed with Shukry on 2026-10-14. `PixCherry_MVP_Spec.md` is the product brief; this file records how it is built.
 
 ## Stack
 

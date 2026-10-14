@@ -1,4 +1,4 @@
-// EventSnap image worker. Runs as its own process (systemd `eventsnap-worker`).
+// PixCherry image worker. Runs as its own process (systemd `pixcherry-worker`).
 // Claims uploaded photos from the `photos` table (FOR UPDATE SKIP LOCKED),
 // checks and re-encodes them with sharp, writes full/md/sm to storage and
 // marks them ready. Several workers can run side by side safely.
@@ -192,6 +192,6 @@ const shutdown = () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.log(`eventsnap worker: ${CONCURRENCY} slot(s), storage=${storage.name}`);
+console.log(`pixcherry worker: ${CONCURRENCY} slot(s), storage=${storage.name}`);
 await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => loop(i + 1)));
 await db.end();

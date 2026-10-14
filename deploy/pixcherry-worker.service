@@ -1,17 +1,17 @@
 [Unit]
-Description=EventSnap image worker (sharp)
+Description=PixCherry image worker (sharp)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=eventsnap
-Group=eventsnap
-WorkingDirectory=/home/eventsnap/worker
-EnvironmentFile=/home/eventsnap/app/.env
+User=pixcherry
+Group=pixcherry
+WorkingDirectory=/home/pixcherry/worker
+EnvironmentFile=/home/pixcherry/app/.env
 Environment=NODE_ENV=production
 # One photo per vCPU. Raise with the server size (and WORKER_CONCURRENCY in .env wins).
-Environment=WORKER_CONCURRENCY=2
+Environment=WORKER_CONCURRENCY=1
 ExecStart=/usr/bin/node worker.mjs
 Restart=always
 RestartSec=3
@@ -22,7 +22,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/home/eventsnap/worker
+ReadWritePaths=/home/pixcherry/worker
 
 [Install]
 WantedBy=multi-user.target

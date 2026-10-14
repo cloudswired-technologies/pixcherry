@@ -11,7 +11,7 @@ import { codeEmail } from "@/lib/email-templates";
 // Organiser login: 6-digit code by email, then a signed session cookie.
 // Bumping users.session_version signs the user out everywhere.
 
-const COOKIE = "es_session";
+const COOKIE = "pc_session";
 const SESSION_DAYS = 30;
 const CODE_MINUTES = 10;
 const MAX_ATTEMPTS = 5;

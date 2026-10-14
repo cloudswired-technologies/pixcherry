@@ -76,7 +76,7 @@ test("screens", async ({ browser }) => {
   await d.goto(`/dashboard/events/${id}`);
   await d.screenshot({ path: `${OUT}/event-overview.png`, fullPage: true });
   const dp = await phone.newPage();
-  await dp.context().addCookies((await desk.cookies()).filter((c) => c.name === "es_session"));
+  await dp.context().addCookies((await desk.cookies()).filter((c) => c.name === "pc_session"));
   await dp.goto(`/dashboard/events/${id}`);
   await dp.screenshot({ path: `${OUT}/event-overview-phone.png`, fullPage: true });
   await d.goto(`/dashboard/events/${id}/qr`);

@@ -131,7 +131,7 @@ export function Logo({ className }: { className?: string }) {
           <circle cx="12" cy="13" r="3.5" />
         </svg>
       </span>
-      EventSnap
+      PixCherry
     </span>
   );
 }

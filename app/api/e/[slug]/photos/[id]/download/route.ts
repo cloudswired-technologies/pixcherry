@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   return new Response(stream, {
     headers: {
       "content-type": "image/jpeg",
-      "content-disposition": `attachment; filename="eventsnap-${id.slice(0, 8)}.jpg"`,
+      "content-disposition": `attachment; filename="pixcherry-${id.slice(0, 8)}.jpg"`,
       "cache-control": "private, max-age=3600",
     },
   });

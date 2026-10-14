@@ -1,8 +1,8 @@
-# EventSnap
+# PixCherry
 
 Guests scan one QR code, upload photos from their phones, and everything lands in one event album. Organisers pay once per event; photos are deleted automatically after the package's storage period.
 
-- Product brief: `EventSnap_MVP_Spec.md`
+- Product brief: `EventSnap_MVP_Spec.md` (written under the working name EventSnap)
 - How it's built and why: `DECISIONS.md`
 - Going live: `docs/GO-LIVE.md`
 

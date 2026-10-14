@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # One-time server setup (idempotent). Run as root on a fresh Ubuntu VPS:
-#   ssh eventsnap 'bash -s' < deploy/setup-server.sh
-# Installs Node 24, Caddy, pg_dump 17, rclone; creates the "eventsnap" user,
+#   ssh pixcherry 'bash -s' < deploy/setup-server.sh
+# Installs Node 24, Caddy, pg_dump 17, rclone; creates the "pixcherry" user,
 # folders, hourly cron and nightly DB backup. Firewall/SSH hardening is done
 # separately (see the Diagnose hardening playbook) and needs explicit approval.
 set -u
-APP=/home/eventsnap/app
+APP=/home/pixcherry/app
 
-id eventsnap >/dev/null 2>&1 || useradd -m -s /bin/bash eventsnap
-mkdir -p $APP/releases /home/eventsnap/worker /var/log/caddy /var/backups/eventsnap /etc/caddy/certs
-chown -R eventsnap:eventsnap $APP /home/eventsnap/worker
+id pixcherry >/dev/null 2>&1 || useradd -m -s /bin/bash pixcherry
+mkdir -p $APP/releases /home/pixcherry/worker /var/log/caddy /var/backups/pixcherry /etc/caddy/certs
+chown -R pixcherry:pixcherry $APP /home/pixcherry/worker
 chmod 750 $APP
 
 if ! command -v node >/dev/null || ! node -v | grep -q '^v24\.'; then
@@ -45,10 +45,10 @@ if [ -e $APP/current/deploy/Caddyfile ] && [ -e /etc/caddy/certs/origin.pem ]; t
 fi
 
 # Hourly: retention/deletion, warnings, stale uploads. 03:00 MYT: DB backup.
-cat > /etc/cron.d/eventsnap <<'CRON'
+cat > /etc/cron.d/pixcherry <<'CRON'
 SHELL=/bin/bash
-5 * * * * root curl -fsS -m 600 -X POST -H "Authorization: Bearer $(grep -E '^CRON_SECRET=' /home/eventsnap/app/.env | cut -d= -f2-)" http://127.0.0.1:3000/api/cron/hourly >> /var/log/eventsnap-cron.log 2>&1
-0 19 * * * root bash /home/eventsnap/app/current/deploy/backup.sh >> /var/log/eventsnap-backup.log 2>&1
+5 * * * * root curl -fsS -m 600 -X POST -H "Authorization: Bearer $(grep -E '^CRON_SECRET=' /home/pixcherry/app/.env | cut -d= -f2-)" http://127.0.0.1:3000/api/cron/hourly >> /var/log/pixcherry-cron.log 2>&1
+0 19 * * * root bash /home/pixcherry/app/current/deploy/backup.sh >> /var/log/pixcherry-backup.log 2>&1
 CRON
-chmod 644 /etc/cron.d/eventsnap
+chmod 644 /etc/cron.d/pixcherry
 echo "setup ok"
