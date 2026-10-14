@@ -98,7 +98,9 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await guest.getByRole("button", { name: /Let's go/ }).click();
   await expect(guest.getByText(/You have\s*20\s*shots left/)).toBeVisible();
   await guest.locator("input[type=file][multiple]").setInputFiles([...files, bad]);
-  await expect(guest.getByText("3 shared")).toBeVisible({ timeout: 90_000 });
+  await guest.getByRole("button", { name: /Share 4 photos/ }).click();
+  await expect(guest.getByRole("status")).toContainText("3 photos shared", { timeout: 90_000 });
+  await expect(guest.getByRole("alert").filter({ hasText: "couldn't be shared" })).toContainText("1 photo couldn't be shared");
   await expect(guest.getByText(/You have\s*17\s*shots left/)).toBeVisible();
 
   // worker processes them; gallery picks them up by polling
@@ -146,8 +148,9 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await guest.reload();
   await expect(guest.getByText(/You have\s*1\s*shot left/)).toBeVisible();
   await guest.locator("input[type=file][multiple]").setInputFiles(files.slice(0, 2));
-  await expect(guest.getByText(/Only 1 more photo\(s\) allowed/)).toBeVisible();
-  await expect(guest.getByText("1 shared")).toBeVisible({ timeout: 60_000 });
+  await expect(guest.getByText(/only the first 1 will be shared/)).toBeVisible();
+  await guest.getByRole("button", { name: /Share 1 photo/ }).click();
+  await expect(guest.getByRole("status")).toContainText("Shared!", { timeout: 60_000 });
 
   // admin pages render
   for (const p of ["/admin", "/admin/events", "/admin/plans", "/admin/quality", "/admin/addons", "/admin/promos", "/admin/settings", "/admin/logs"]) {

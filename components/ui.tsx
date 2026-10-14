@@ -122,16 +122,4 @@ export function PageHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
   );
 }
 
-export function Logo({ className }: { className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-2 font-bold tracking-tight", className)}>
-      <span className="grid size-7 place-items-center rounded-lg bg-brand text-white">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="size-4" aria-hidden>
-          <path d="M4 8h3l2-3h6l2 3h3v11H4z" strokeLinejoin="round" />
-          <circle cx="12" cy="13" r="3.5" />
-        </svg>
-      </span>
-      PixCherry
-    </span>
-  );
-}
+export { Logo } from "@/components/brand";

@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-30 border-b border-border bg-ink text-white">
         <div className="container-page flex h-14 items-center justify-between gap-3">
           <Link href="/admin" className="flex items-center gap-2">
-            <Logo />
+            <Logo light />
             <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">Admin</span>
           </Link>
           <Link href="/dashboard" className="text-sm text-white/80 hover:text-white">

@@ -12,6 +12,7 @@ import { eventPhase } from "@/lib/limits";
 import { FEATURES, LIMITS, normaliseLimits } from "@/lib/plan-schema";
 import { listPlans, listPresets } from "@/lib/plans";
 import { activateEvent, saveOverrides } from "../../actions";
+import { DeleteEvent } from "@/app/dashboard/events/[id]/settings/delete-event";
 
 export const metadata = { title: "Event" };
 
@@ -48,6 +49,11 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
             <LinkButton href={`/dashboard/events/${e.id}`} variant="outline" size="sm">
               Open as organiser
             </LinkButton>
+            {!e.purged_at ? (
+              <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline" size="sm">
+                Edit details
+              </LinkButton>
+            ) : null}
           </>
         }
       />
@@ -117,6 +123,15 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
             </Field>
           </ActionForm>
         </Card>
+      )}
+
+      {!e.purged_at ? (
+        <Card className="grid gap-3 border-danger/30">
+          <h2 className="font-bold text-danger">Delete event</h2>
+          <DeleteEvent id={e.id} name={e.name} paid={!!e.paid_at} />
+        </Card>
+      ) : (
+        <Notice tone="danger">Photos for this event were deleted on {formatDate(e.purged_at)}.</Notice>
       )}
 
       <Card className="grid gap-3">

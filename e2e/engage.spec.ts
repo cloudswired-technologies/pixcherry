@@ -58,17 +58,26 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await g.getByLabel("Your name").fill("Amir");
   await g.getByRole("button", { name: /Let's go/ }).click();
   const cam = g.getByRole("dialog", { name: "Camera" });
+  const counter = cam.locator('[aria-live="polite"]');
   await expect(cam).toBeVisible();
-  await expect(cam.getByText(/20\s*shots left/)).toBeVisible();
+  await expect(counter).toContainText("20");
   await cam.getByRole("button", { name: "Noir" }).click();
   await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
+  // Review step: retake costs nothing, share uses a shot.
   await cam.getByRole("button", { name: "Take photo" }).click();
-  await expect(cam.getByText(/19\s*shots left/)).toBeVisible();
+  await expect(cam.getByAltText("Your photo")).toBeVisible();
+  await cam.getByRole("button", { name: "Retake" }).click();
+  await expect(counter).toContainText("20");
+  await cam.getByRole("button", { name: "Take photo" }).click();
+  await cam.getByRole("button", { name: "Share" }).click();
+  await expect(counter).toContainText("19");
   await expect(cam.getByAltText("Last shot")).toBeVisible();
-  await cam.getByRole("button", { name: "Close camera" }).click();
+  await cam.getByRole("button", { name: "Back to album" }).click();
+  await expect(cam).toHaveCount(0);
 
   // Upload done + worker -> mission ticked, photo in gallery, filter applied (Noir = greyscale).
   await expect(g.getByText("1/8")).toBeVisible({ timeout: 60_000 });
+  await g.getByRole("button", { name: "All Photos", exact: true }).click();
   await expect(g.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 60_000 });
   const [shot] = await sql("select id, mission_id, width from photos where event_id = $1 and status = 'ready'", [ev.id]);
   expect(shot.mission_id).toBe(missions[0].id);
@@ -78,7 +87,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   expect(Math.abs(r.mean - gr.mean)).toBeLessThan(3); // greyscale: channels match
   expect(Math.abs(gr.mean - b.mean)).toBeLessThan(3);
 
-  // A second guest uploads from the gallery picker, hearts Amir's photo.
+  // A second guest uploads from the gallery picker (with the review step), hearts Amir's photo.
   const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const g2 = await ctx2.newPage();
   await g2.goto(`/e/${slug}`);
@@ -88,8 +97,10 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g2.getByText(/You have\s*20\s*shots left/)).toBeVisible();
   const img = await sharp({ create: { width: 900, height: 700, channels: 3, background: "#3d8be8" } }).jpeg().toBuffer();
   await g2.locator("input[type=file][multiple]").setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: img });
-  await expect(g2.getByText("1 shared")).toBeVisible({ timeout: 60_000 });
-  await expect(g2.getByRole("status")).toContainText("Shared!");
+  await expect(g2.getByRole("dialog", { name: "Ready to share?" })).toBeVisible();
+  await g2.getByRole("button", { name: /Share 1 photo/ }).click();
+  await expect(g2.getByRole("status")).toContainText("Shared!", { timeout: 60_000 });
+  await g2.getByRole("button", { name: "All Photos", exact: true }).click();
   await expect(g2.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 30_000 });
   await g2.getByAltText("Photo by Amir").click();
   const [voteRes] = await Promise.all([
@@ -102,16 +113,15 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   expect((await sql("select vote_count from photos where id = $1", [shot.id]))[0].vote_count).toBe(1);
 
   // People folders.
-  await g2.getByRole("button", { name: "People" }).click();
-  await expect(g2.getByText("Amir")).toBeVisible();
-  await g2.getByRole("button", { name: /Amir/ }).click();
-  await expect(g2.getByRole("button", { name: /📁 Amir/ })).toBeVisible();
+  await g2.getByRole("button", { name: "By People" }).click();
+  await g2.getByRole("button", { name: /Amir/ }).first().click();
+  await expect(g2.getByRole("heading", { name: "Photos by Amir" })).toBeVisible();
   await expect(g2.getByAltText("Photo by Amir")).toHaveCount(1);
   await expect(g2.getByAltText("Photo by Nora")).toHaveCount(0);
 
-  // Top: snappers + most loved.
-  await g2.getByRole("button", { name: "Top", exact: true }).click();
-  await expect(g2.getByRole("heading", { name: "🏆 Top snappers" })).toBeVisible();
+  // Highlights: top snappers + most loved.
+  await g2.getByRole("button", { name: "Highlights" }).click();
+  await expect(g2.getByRole("heading", { name: "🏆 Top snappers" })).toBeVisible({ timeout: 25_000 });
   await expect(g2.locator("li", { hasText: "Amir" })).toBeVisible({ timeout: 25_000 });
 
   // Wishes.
@@ -137,6 +147,25 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   expect(text).toContain("wishes.txt");
   expect(text).toMatch(/Amir-[0-9a-f]{4}\/0001\.jpg/);
   expect(text).toMatch(/Nora-[0-9a-f]{4}\/0001\.jpg/);
+
+  // Organiser deletes the event: wrong name refused, right name deletes everything.
+  await page.goto(`/dashboard/events/${ev.id}/settings`);
+  const del = page.getByRole("button", { name: "Delete event and all photos" });
+  await page.locator('input[name="confirm"]').fill("wrong name");
+  await expect(del).toBeDisabled();
+  await page.locator('input[name="confirm"]').fill("Engage E2E");
+  await del.click();
+  await expect(page).toHaveURL(/\/dashboard\?deleted=1/);
+  await expect(page.getByText("The event was deleted.")).toBeVisible();
+  const [after] = await sql(
+    "select purged_at, (select count(*)::int from wishes where event_id = $1) as wishes, (select count(*)::int from photos where event_id = $1 and status <> 'deleted') as photos from events where id = $1",
+    [ev.id],
+  );
+  expect(after.purged_at).toBeTruthy();
+  expect(after.wishes).toBe(0);
+  expect(after.photos).toBe(0);
+  await g2.reload();
+  await expect(g2.getByRole("heading", { name: "This album has closed" })).toBeVisible();
 
   await ctx.close();
   await ctx2.close();

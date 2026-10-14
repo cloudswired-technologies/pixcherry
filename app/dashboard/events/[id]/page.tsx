@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, ExternalLink, Printer, QrCode, Tv } from "lucide-react";
+import { Download, ExternalLink, Pencil, Printer, QrCode, Tv } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import { Meter, PhaseBadge } from "@/components/event-bits";
 import { planLines } from "@/components/plan-card";
@@ -63,7 +63,25 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
 
   return (
     <div className="grid gap-6">
-      <PageHeader title={e.name} sub={range} actions={<PhaseBadge phase={phase} />} />
+      <PageHeader
+        title={e.name}
+        sub={[range, e.venue].filter(Boolean).join(" · ")}
+        actions={
+          <>
+            <PhaseBadge phase={phase} />
+            {!e.purged_at ? (
+              <>
+                <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline" size="sm">
+                  <Pencil aria-hidden /> Edit details
+                </LinkButton>
+                <a href={guestUrl(APP_URL, e.slug)} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
+                  <ExternalLink aria-hidden /> Guest page
+                </a>
+              </>
+            ) : null}
+          </>
+        }
+      />
 
       {e.purged_at ? (
         <Notice tone="danger">The storage period ended on {formatDate(e.purged_at)} and the photos were deleted.</Notice>

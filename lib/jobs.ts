@@ -46,17 +46,30 @@ export async function purgeExpiredEvents() {
   );
   let objects = 0;
   for (const r of rows) {
-    objects += await deletePrefix(`ev/${r.id}/`);
-    await q("update photos set status = 'deleted' where event_id = $1 and status <> 'deleted'", [r.id]);
-    // Wishes and hearts are guests' personal data: they go with the photos.
-    await q("delete from wishes where event_id = $1", [r.id]);
-    await q("delete from photo_votes v using photos p where p.id = v.photo_id and p.event_id = $1", [r.id]);
-    await q("update photos set vote_count = 0 where event_id = $1", [r.id]);
-    await q("update events set purged_at = now(), photo_count = 0, slot_count = 0, bytes_used = 0, cover_key = null, logo_key = null, uploads_enabled = false where id = $1", [r.id]);
-    await q("insert into audit_log (action, target, details) values ('event.purged', $1, $2)", [r.id, JSON.stringify({ photos: r.photo_count })]);
+    objects += await purgeEvent(r.id, null, "retention");
     if (r.photo_count > 0) await sendEmail({ to: r.email, template: "deleted", ...deletedEmail({ eventName: r.name }) });
   }
   return { events: rows.length, objects };
+}
+
+/**
+ * Deletes everything guests put into an event: files in storage, wishes and
+ * hearts. The event row and its payments stay (receipts, accounting).
+ * Used by the retention job and by "Delete event". Returns objects removed.
+ */
+export async function purgeEvent(eventId: string, actorId: string | null, reason: "retention" | "deleted") {
+  const objects = await deletePrefix(`ev/${eventId}/`);
+  await q("update photos set status = 'deleted' where event_id = $1 and status <> 'deleted'", [eventId]);
+  // Wishes and hearts are guests' personal data: they go with the photos.
+  await q("delete from wishes where event_id = $1", [eventId]);
+  await q("delete from photo_votes v using photos p where p.id = v.photo_id and p.event_id = $1", [eventId]);
+  await q("update photos set vote_count = 0 where event_id = $1", [eventId]);
+  await q(
+    "update events set purged_at = now(), deletion_at = least(coalesce(deletion_at, now()), now()), photo_count = 0, slot_count = 0, bytes_used = 0, cover_key = null, logo_key = null, uploads_enabled = false where id = $1",
+    [eventId],
+  );
+  await q("insert into audit_log (actor_id, action, target, details) values ($1, 'event.purged', $2, $3)", [actorId, eventId, JSON.stringify({ reason, objects })]);
+  return objects;
 }
 
 /** Unpaid drafts older than 30 days and old login codes. */

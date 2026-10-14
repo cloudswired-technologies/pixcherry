@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarDays, Images, Plus, Users } from "lucide-react";
 import { PhaseBadge } from "@/components/event-bits";
-import { Card, LinkButton, PageHeader } from "@/components/ui";
+import { Card, LinkButton, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { coverUrl, listOwnerEvents } from "@/lib/events";
 import { formatDate } from "@/lib/format";
@@ -9,7 +9,8 @@ import { eventPhase } from "@/lib/limits";
 
 export const metadata = { title: "My events" };
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const user = await requireUser();
   const events = await listOwnerEvents(user.id);
   return (
@@ -22,6 +23,7 @@ export default async function Dashboard() {
           </LinkButton>
         }
       />
+      {deleted ? <Notice tone="ok">The event was deleted.</Notice> : null}
       {events.length === 0 ? (
         <Card className="grid place-items-center gap-3 py-14 text-center">
           <Images className="size-10 text-muted-foreground" aria-hidden />

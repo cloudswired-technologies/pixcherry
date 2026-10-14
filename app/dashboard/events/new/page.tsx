@@ -25,6 +25,9 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
               <Input id="ends_at" name="ends_at" type="datetime-local" required defaultValue={toLocalInput(end)} />
             </Field>
           </div>
+          <Field label="Venue (optional)" htmlFor="venue" help="Shown under the event name, e.g. “The Majestic Hotel”.">
+            <Input id="venue" name="venue" maxLength={120} />
+          </Field>
           <Field label="Message for guests (optional)" htmlFor="description">
             <Textarea id="description" name="description" maxLength={2000} placeholder="Thank you for celebrating with us! Share your photos here." />
           </Field>

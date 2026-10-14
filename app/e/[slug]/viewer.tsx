@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Heart, X } from "lucide-react";
+import { ChevronLeft, Download, Heart, Share2 } from "lucide-react";
 import type { GalleryPhoto } from "@/lib/photos";
+import { initial } from "./panels";
 
 type MissionMap = Map<string, { title: string; emoji: string | null }>;
 
-/** Full-screen photo viewer: swipe, arrow keys, double-tap heart, download. */
+/** Full-screen photo viewer: swipe, filmstrip, double-tap heart, download, share. */
 export function Viewer({
   slug,
   photos,
@@ -17,6 +18,7 @@ export function Viewer({
   onVote,
   missions,
   onFolder,
+  total,
 }: {
   slug: string;
   photos: GalleryPhoto[];
@@ -27,31 +29,51 @@ export function Viewer({
   onVote: (p: GalleryPhoto) => void;
   missions: MissionMap;
   onFolder: (guest: string, name: string | null) => void;
+  total?: number;
 }) {
   const ph = photos[index];
-  const touch = useRef<{ x: number; t: number } | null>(null);
+  const touch = useRef<{ x: number; y: number } | null>(null);
   const lastTap = useRef(0);
+  const strip = useRef<HTMLDivElement>(null);
   const [burst, setBurst] = useState(0);
-  const prev = () => index > 0 && onIndex(index - 1);
-  const next = () => index < photos.length - 1 && onIndex(index + 1);
+  const [dir, setDir] = useState<1 | -1>(1);
+  const go = (i: number) => {
+    if (i < 0 || i >= photos.length) return;
+    setDir(i > index ? 1 : -1);
+    onIndex(i);
+  };
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // Phone back button closes the viewer.
+  useEffect(() => {
+    history.pushState({ pcViewer: true }, "");
+    const pop = () => onCloseRef.current();
+    window.addEventListener("popstate", pop);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("popstate", pop);
+      document.body.style.overflow = overflow;
+    };
+  }, []);
+  const close = () => history.back();
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") history.back();
       if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
       if (e.key === "ArrowRight" && index < photos.length - 1) onIndex(index + 1);
     };
     window.addEventListener("keydown", key);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", key);
-      document.body.style.overflow = overflow;
-    };
-  }, [index, photos.length, onIndex, onClose]);
+    return () => window.removeEventListener("keydown", key);
+  }, [index, photos.length, onIndex]);
 
   useEffect(() => {
     for (const n of [photos[index + 1], photos[index - 1]]) if (n) new Image().src = n.md;
+    strip.current?.querySelector<HTMLElement>(`[data-i="${index}"]`)?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [index, photos]);
 
   if (!ph) return null;
@@ -61,98 +83,106 @@ export function Viewer({
     if (!ph.voted) setBurst((b) => b + 1);
     onVote(ph);
   };
+  const share = async () => {
+    const url = `${location.origin}/api/e/${slug}/photos/${ph.id}/download`;
+    try {
+      const r = await fetch(url);
+      const file = new File([await r.blob()], `pixcherry-${ph.id.slice(0, 8)}.jpg`, { type: "image/jpeg" });
+      if (navigator.canShare?.({ files: [file] })) return await navigator.share({ files: [file] });
+      if (navigator.share) return await navigator.share({ url: location.href });
+    } catch {
+      /* cancelled */
+    }
+  };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Photo"
-      className="fixed inset-0 z-50 flex flex-col bg-black text-white"
-      onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, t: Date.now() })}
-      onTouchEnd={(e) => {
-        const s = touch.current;
-        touch.current = null;
-        if (!s) return;
-        const dx = e.changedTouches[0].clientX - s.x;
-        if (dx > 50) return prev();
-        if (dx < -50) return next();
-        // Double tap = heart.
-        const now = Date.now();
-        if (now - lastTap.current < 300) {
-          e.preventDefault(); // no synthetic dblclick: it would toggle the heart back
-          if (!ph.voted) heart();
-          lastTap.current = 0;
-          return;
-        }
-        lastTap.current = now;
-      }}
-    >
+    <div role="dialog" aria-modal="true" aria-label="Photo" className="fixed inset-0 z-50 flex flex-col bg-[#0b0b0d] text-white">
       <div className="flex items-center justify-between gap-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="min-w-0 text-sm">
-          {ph.guest ? (
-            <button type="button" className="block max-w-full truncate font-semibold underline-offset-2 hover:underline" onClick={() => onFolder(ph.guest!, ph.by)}>
-              {ph.by ?? "Guest"}
-            </button>
-          ) : (
-            <div className="truncate font-semibold">Organiser</div>
-          )}
-          <div className="text-xs text-white/60">
-            {new Date(ph.at).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+        <button type="button" onClick={close} className="grid size-10 place-items-center rounded-full hover:bg-white/10" aria-label="Close">
+          <ChevronLeft className="size-6" aria-hidden />
+        </button>
+        <div className="text-sm font-semibold tabular-nums">
+          {index + 1} of {Math.max(total ?? 0, photos.length)}
+        </div>
+        <div className="size-10" />
+      </div>
+
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+        onDoubleClick={() => !ph.voted && heart()}
+        onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={(e) => {
+          const s = touch.current;
+          touch.current = null;
+          if (!s) return;
+          const dx = e.changedTouches[0].clientX - s.x;
+          const dy = e.changedTouches[0].clientY - s.y;
+          if (dy > 90 && Math.abs(dx) < 60) return close(); // swipe down to close
+          if (dx > 50) return go(index - 1);
+          if (dx < -50) return go(index + 1);
+          const now = Date.now();
+          if (now - lastTap.current < 300) {
+            e.preventDefault();
+            if (!ph.voted) heart();
+            lastTap.current = 0;
+            return;
+          }
+          lastTap.current = now;
+        }}
+      >
+        <img
+          key={ph.id}
+          src={ph.md}
+          alt=""
+          draggable={false}
+          className="max-h-full max-w-full select-none object-contain"
+          style={{ animation: `${dir > 0 ? "pc-in-right" : "pc-in-left"} 0.3s ease` }}
+        />
+        {burst ? <Heart key={burst} className="pointer-events-none absolute size-28 fill-brand text-brand drop-shadow-lg [animation:pc-heart_0.8s_ease_forwards]" aria-hidden /> : null}
+        {mission ? (
+          <span className="absolute left-3 top-3 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold backdrop-blur">
+            {mission.emoji ?? "🎯"} {mission.title}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-full bg-brand font-bold">{initial(ph.by)}</span>
+          <div className="min-w-0 flex-1">
+            {ph.guest ? (
+              <button type="button" className="block max-w-full truncate font-semibold hover:underline" onClick={() => onFolder(ph.guest!, ph.by)}>
+                {ph.by ?? "Guest"}
+              </button>
+            ) : (
+              <div className="font-semibold">Organiser</div>
+            )}
+            <div className="text-xs text-white/60">{new Date(ph.at).toLocaleString("en-MY", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div ref={strip} className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          {photos.map((p, i) => (
+            <button key={p.id} type="button" data-i={i} onClick={() => go(i)} className={`size-12 shrink-0 overflow-hidden rounded-lg border-2 ${i === index ? "border-white" : "border-transparent opacity-60"}`}>
+              <img src={p.sm} alt="" loading="lazy" className="size-full object-cover" />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-around border-t border-white/10 pt-2">
+          {voting && ph.status === "ready" ? (
+            <button type="button" onClick={heart} aria-pressed={ph.voted} aria-label={ph.voted ? "Remove heart" : "Heart this photo"} className="inline-flex h-11 items-center gap-2 rounded-full px-4 font-semibold">
+              <Heart className={`size-6 transition-transform ${ph.voted ? "scale-110 fill-brand text-brand" : ""}`} aria-hidden />
+              {ph.votes}
+            </button>
+          ) : null}
           {ph.status === "ready" ? (
-            <a href={`/api/e/${slug}/photos/${ph.id}/download`} className="grid size-10 place-items-center rounded-full hover:bg-white/10" aria-label="Download photo">
-              <Download className="size-5" aria-hidden />
+            <a href={`/api/e/${slug}/photos/${ph.id}/download`} className="grid size-11 place-items-center rounded-full" aria-label="Download photo">
+              <Download className="size-6" aria-hidden />
             </a>
           ) : null}
-          <button type="button" onClick={onClose} className="grid size-10 place-items-center rounded-full hover:bg-white/10" aria-label="Close">
-            <X className="size-6" aria-hidden />
+          <button type="button" onClick={share} className="grid size-11 place-items-center rounded-full" aria-label="Share photo">
+            <Share2 className="size-6" aria-hidden />
           </button>
         </div>
-      </div>
-
-      <div className="relative flex min-h-0 flex-1 items-center justify-center" onDoubleClick={() => !ph.voted && heart()}>
-        <img key={ph.id} src={ph.md} alt="" className="max-h-full max-w-full select-none object-contain" draggable={false} />
-        {burst ? (
-          <Heart key={burst} className="pointer-events-none absolute size-28 fill-white text-white drop-shadow-lg [animation:pc-heart_0.8s_ease_forwards]" aria-hidden />
-        ) : null}
-        {index > 0 ? (
-          <button type="button" onClick={prev} className="absolute left-2 hidden size-11 place-items-center rounded-full bg-white/10 sm:grid" aria-label="Previous">
-            <ChevronLeft aria-hidden />
-          </button>
-        ) : null}
-        {index < photos.length - 1 ? (
-          <button type="button" onClick={next} className="absolute right-2 hidden size-11 place-items-center rounded-full bg-white/10 sm:grid" aria-label="Next">
-            <ChevronRight aria-hidden />
-          </button>
-        ) : null}
-      </div>
-
-      <div className="flex items-center justify-between gap-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="min-w-0 text-xs text-white/70">
-          {mission ? (
-            <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-white/10 px-2.5 py-1">
-              {mission.emoji ?? "🎯"} {mission.title}
-            </span>
-          ) : (
-            <span>
-              {index + 1} / {photos.length}
-            </span>
-          )}
-        </div>
-        {voting && ph.status === "ready" ? (
-          <button
-            type="button"
-            onClick={heart}
-            aria-pressed={ph.voted}
-            aria-label={ph.voted ? "Remove heart" : "Heart this photo"}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-4 font-semibold"
-          >
-            <Heart className={`size-5 transition-transform ${ph.voted ? "scale-110 fill-[#ff4d6d] text-[#ff4d6d]" : ""}`} aria-hidden />
-            {ph.votes}
-          </button>
-        ) : null}
       </div>
     </div>
   );

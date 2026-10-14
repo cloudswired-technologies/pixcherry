@@ -1,21 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans } from "next/font/google";
+import { Caveat, Plus_Jakarta_Sans } from "next/font/google";
 import { APP_URL } from "@/lib/env";
 import "./globals.css";
 
-const font = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", display: "swap" });
+const font = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", display: "swap" });
+const script = Caveat({ subsets: ["latin"], variable: "--font-caveat", weight: ["500", "700"], display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
-  title: { default: "PixCherry — Everyone's photos. One event album.", template: "%s · PixCherry" },
-  description: "Put one QR code at your wedding or event. Guests scan, snap and upload. Everyone's photos come together in one shared gallery.",
+  title: { default: "PixCherry — Share your best moment", template: "%s · PixCherry" },
+  description: "Let your guests capture and share their photos from any event. One QR code. All the memories in one place.",
 };
 
-export const viewport: Viewport = { themeColor: "#f7f4ef", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={font.variable}>
+    <html lang="en" className={`${font.variable} ${script.variable}`}>
       <body className="min-h-dvh">{children}</body>
     </html>
   );

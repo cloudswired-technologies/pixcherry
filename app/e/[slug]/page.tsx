@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/ui";
-import { listMissions, missionsDoneBy } from "@/lib/engage";
+import { eventStats, listMissions, missionsDoneBy } from "@/lib/engage";
 import { coverUrl, getEventBySlug, logoUrl } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 import { currentGuest } from "@/lib/guests";
@@ -35,10 +35,11 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
   }
   const guest = await currentGuest(e.id);
   const f = e.cfg.features;
-  const [first, missions, done] = await Promise.all([
+  const [first, missions, done, stats] = await Promise.all([
     listPhotos(e.id, { order: "new", limit: 60, viewer: guest?.id ?? null }),
     f.missions ? listMissions(e.id) : Promise.resolve([]),
     f.missions && guest ? missionsDoneBy(guest.id) : Promise.resolve([]),
+    eventStats(e.id),
   ]);
   return (
     <GuestApp
@@ -46,10 +47,11 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       event={{
         name: e.name,
         description: e.description,
+        venue: e.venue,
         date: formatDate(e.starts_at),
         cover: coverUrl(e),
         logo: f.custom_branding ? logoUrl(e) : null,
-        accent: (f.custom_branding && e.accent_color) || "#e8553d",
+        accent: (f.custom_branding && e.accent_color) || "#e91d48",
         poweredBy: !f.hide_powered_by,
         askName: e.ask_guest_name,
         review: f.moderation && e.require_approval,
@@ -57,12 +59,13 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       }}
       features={{ camera: f.camera, wishes: f.wishes, voting: f.voting, missions: f.missions, albumDownload: f.guest_album_download }}
       canUpload={uploadsOpen(e, e.cfg)}
-      guest={guest ? { name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
+      guest={guest ? { id: guest.id, name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
       limits={{ perGuest: e.cfg.limits.photos_per_guest, maxBytes: e.cfg.limits.max_file_mb * 1024 * 1024 }}
       quality={{ maxPx: e.cfg.quality.max_px, jpeg: e.cfg.quality.jpeg_quality }}
       initial={{ ...first, count: e.photo_count }}
       missions={missions}
       missionsDone={done}
+      stats={{ ...stats, topSnappers: f.voting ? stats.topSnappers : [], topPhotos: f.voting ? stats.topPhotos : [] }}
       siteKey={turnstileSiteKey()}
     />
   );

@@ -16,30 +16,27 @@ export function planLines(p: Pick<Plan, "limits" | "features" | "quality" | "hig
 
 export function PlanCard({ plan, action, compact }: { plan: Plan; action?: ReactNode; compact?: boolean }) {
   return (
-    <div
-      className={cn(
-        "relative flex flex-col rounded-3xl border bg-card p-6 shadow-soft",
-        plan.is_featured ? "border-ink ring-1 ring-ink" : "border-border",
-      )}
-    >
+    <div className={cn("relative flex flex-col rounded-3xl border bg-white p-6 shadow-soft", plan.is_featured ? "border-brand shadow-cherry" : "border-border")}>
       {plan.is_featured ? (
-        <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-1 text-xs font-bold text-white">Most popular</span>
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand px-3 py-1 text-xs font-bold text-white">Most popular</span>
       ) : null}
       <div className="text-lg font-bold">{plan.name}</div>
       {plan.description ? <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p> : null}
       <div className="mt-4 flex items-baseline gap-1.5">
-        <span className="text-4xl font-bold tracking-tight">{formatMoney(plan.price_cents)}</span>
+        <span className="text-4xl font-extrabold tracking-tight">{formatMoney(plan.price_cents)}</span>
         <span className="text-sm text-muted-foreground">per event</span>
       </div>
       <ul className={cn("mt-5 grid gap-2.5 text-sm", compact && "text-[13px]")}>
         {planLines(plan).map((l) => (
-          <li key={l} className="flex gap-2">
-            <Check className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />
+          <li key={l} className="flex gap-2.5">
+            <span className="mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full bg-brand text-white">
+              <Check className="size-3" strokeWidth={3} aria-hidden />
+            </span>
             <span>{l}</span>
           </li>
         ))}
       </ul>
-      {action ? <div className="mt-6 pt-1">{action}</div> : null}
+      {action ? <div className="mt-auto pt-6">{action}</div> : null}
     </div>
   );
 }

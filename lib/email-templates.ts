@@ -11,7 +11,7 @@ function layout(heading: string, paragraphs: string[], button?: { label: string;
 <tr><td style="padding:24px">
 <h1 style="margin:0 0 12px;font-size:20px">${esc(heading)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5">${esc(p)}</p>`).join("")}
-${button ? `<p style="margin:20px 0"><a href="${esc(button.url)}" style="background:#e8553d;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:bold;display:inline-block">${esc(button.label)}</a></p>` : ""}
+${button ? `<p style="margin:20px 0"><a href="${esc(button.url)}" style="background:#e91d48;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:bold;display:inline-block">${esc(button.label)}</a></p>` : ""}
 </td></tr></table></td></tr></table></body></html>`;
   const text = [heading, "", ...paragraphs, ...(button ? ["", `${button.label}: ${button.url}`] : [])].join("\n");
   return { subject, html, text };

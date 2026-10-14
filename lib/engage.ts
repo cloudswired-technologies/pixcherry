@@ -6,15 +6,17 @@ import { photoKeys, publicUrl } from "@/lib/storage";
 
 const UUID = /^[0-9a-f-]{36}$/;
 
-export type Mission = { id: string; title: string; emoji: string | null; sort: number; count: number };
+export type Mission = { id: string; title: string; emoji: string | null; sort: number; count: number; cover: string | null };
 
 export async function listMissions(eventId: string): Promise<Mission[]> {
-  return q<Mission>(
+  const rows = await q<Omit<Mission, "cover"> & { cover_id: string | null }>(
     `select m.id, m.title, m.emoji, m.sort,
-       (select count(*)::int from photos p where p.mission_id = m.id and p.status = 'ready') as count
+       (select count(*)::int from photos p where p.mission_id = m.id and p.status = 'ready') as count,
+       (select p.id from photos p where p.mission_id = m.id and p.status = 'ready' order by p.vote_count desc, p.ready_at desc limit 1) as cover_id
      from event_missions m where m.event_id = $1 order by m.sort, m.created_at`,
     [eventId],
   );
+  return rows.map(({ cover_id, ...m }) => ({ ...m, cover: cover_id ? publicUrl(photoKeys(eventId, cover_id).md) : null }));
 }
 
 /** Mission ids this guest has at least one photo for (any non-failed state). */
@@ -128,7 +130,8 @@ export async function listPeople(eventId: string, limit = 200): Promise<Person[]
 
 export type Stats = {
   photos: number;
-  guests: number;
+  guests: number; // contributors (guests with at least one photo)
+  joined: number; // phones that joined the album
   wishes: number;
   topSnappers: { id: string; name: string | null; count: number }[];
   topPhotos: { id: string; sm: string; md: string; votes: number; by: string | null }[];
@@ -136,8 +139,9 @@ export type Stats = {
 
 export async function eventStats(eventId: string): Promise<Stats> {
   const [counts, snappers, top] = await Promise.all([
-    one<{ photos: number; guests: number; wishes: number }>(
+    one<{ photos: number; guests: number; wishes: number; joined: number }>(
       `select (select count(*)::int from photos where event_id = $1 and status = 'ready') as photos,
+         (select guest_count from events where id = $1) as joined,
          (select count(distinct guest_id)::int from photos where event_id = $1 and status = 'ready') as guests,
          (select count(*)::int from wishes where event_id = $1 and not is_hidden) as wishes`,
       [eventId],
@@ -156,6 +160,7 @@ export async function eventStats(eventId: string): Promise<Stats> {
   return {
     photos: counts?.photos ?? 0,
     guests: counts?.guests ?? 0,
+    joined: counts?.joined ?? 0,
     wishes: counts?.wishes ?? 0,
     topSnappers: snappers,
     topPhotos: top.map((t) => {

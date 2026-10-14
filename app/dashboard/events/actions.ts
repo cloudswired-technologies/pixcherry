@@ -12,7 +12,8 @@ import { approvePhotos, deletePhoto } from "@/lib/photos";
 import { PaymentError, startPurchase, type PurchaseKind } from "@/lib/payments";
 import { rateLimit } from "@/lib/rate-limit";
 import { audit } from "@/lib/settings";
-import { deleteObject, putObject } from "@/lib/storage";
+import { deleteObject, deletePrefix, putObject } from "@/lib/storage";
+import { purgeEvent } from "@/lib/jobs";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -28,13 +29,14 @@ async function managed(id: string) {
 function readDetails(fd: FormData) {
   const name = String(fd.get("name") ?? "").trim().slice(0, 120);
   const description = String(fd.get("description") ?? "").trim().slice(0, 2000);
+  const venue = String(fd.get("venue") ?? "").replace(/[<>]/g, "").trim().slice(0, 120);
   const starts = parseLocalDateTime(String(fd.get("starts_at") ?? ""));
   const ends = parseLocalDateTime(String(fd.get("ends_at") ?? ""));
   if (!name) return { error: "Give your event a name." } as const;
   if (!starts || !ends) return { error: "Enter when the event starts and ends." } as const;
   if (ends < starts) return { error: "The end must be after the start." } as const;
   if (ends.getTime() - starts.getTime() > 14 * 86400_000) return { error: "An event can last at most 14 days." } as const;
-  return { name, description, starts, ends } as const;
+  return { name, description, venue, starts, ends } as const;
 }
 
 export async function createEvent(_: FormState, fd: FormData): Promise<FormState> {
@@ -45,8 +47,8 @@ export async function createEvent(_: FormState, fd: FormData): Promise<FormState
   if (d.ends.getTime() < Date.now() - 86400_000) return { error: "That date has already passed." };
   const slug = await uniqueSlug();
   const row = await one<{ id: string }>(
-    "insert into events (owner_id, slug, name, description, starts_at, ends_at) values ($1,$2,$3,$4,$5,$6) returning id",
-    [user.id, slug, d.name, d.description, d.starts, d.ends],
+    "insert into events (owner_id, slug, name, description, venue, starts_at, ends_at) values ($1,$2,$3,$4,$5,$6,$7) returning id",
+    [user.id, slug, d.name, d.description, d.venue, d.starts, d.ends],
   );
   const plan = String(fd.get("plan") ?? "");
   redirect(`/dashboard/events/${row!.id}/checkout${/^[a-z0-9-]{2,40}$/.test(plan) ? `?plan=${plan}` : ""}`);
@@ -62,7 +64,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
   await tx(async (c) => {
     await q(
       `update events set name = $2, description = $3, starts_at = $4, ends_at = $5, ask_guest_name = $6, uploads_enabled = $7,
-         require_approval = $8, accent_color = $9, camera_only = $10, updated_at = now() where id = $1`,
+         require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, updated_at = now() where id = $1`,
       [
         e.id,
         d.name,
@@ -74,6 +76,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         e.cfg.features.moderation && fd.get("require_approval") === "on",
         branding && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null,
         e.cfg.features.camera && fd.get("camera_only") === "on",
+        d.venue,
       ],
       c,
     );
@@ -254,4 +257,30 @@ export async function toggleWish(id: string, wishId: string, hidden: boolean) {
   await setWishHidden(e.id, wishId, hidden);
   await audit(user.id, hidden ? "wish.hide" : "wish.show", e.id, { wish: wishId });
   revalidatePath(`/dashboard/events/${e.id}/engage`);
+}
+
+// ------------------------------------------------------------------ delete
+
+/**
+ * Deletes the event now. Unpaid drafts disappear; paid events keep their
+ * record and receipts but every photo, wish and heart is deleted for good.
+ * The organiser (or an admin) must type the event name to confirm.
+ */
+export async function deleteEventNow(id: string, _: FormState, fd: FormData): Promise<FormState> {
+  const { user, e } = await managed(id);
+  const typed = String(fd.get("confirm") ?? "").trim().toLowerCase();
+  if (typed !== e.name.trim().toLowerCase()) return { error: "Type the event name exactly to confirm." };
+  if (!(await rateLimit("delete-event", 10, 3600_000, user.id))) return { error: "Too many attempts. Try again later." };
+  if (!e.paid_at) {
+    await q("delete from events where id = $1 and paid_at is null", [e.id]);
+    await deletePrefixSafe(e.id);
+  } else if (!e.purged_at) {
+    await purgeEvent(e.id, user.id, "deleted");
+  }
+  await audit(user.id, "event.delete", e.id, { name: e.name, paid: !!e.paid_at });
+  redirect(user.is_admin && e.owner_id !== user.id ? `/admin/events/${e.id}` : "/dashboard?deleted=1");
+}
+
+async function deletePrefixSafe(eventId: string) {
+  await deletePrefix(`ev/${eventId}/`).catch(() => 0);
 }

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { coverUrl, getManagedEvent, logoUrl } from "@/lib/events";
 import { toLocalInput } from "@/lib/format";
 import { regenerateLink, updateEvent, uploadCover, uploadLogo } from "../../actions";
+import { DeleteEvent } from "./delete-event";
 
 export const metadata = { title: "Event settings" };
 
@@ -19,7 +20,7 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
   const logo = logoUrl(e);
   return (
     <div className="grid max-w-2xl gap-6">
-      <PageHeader title="Settings" />
+      <PageHeader title="Edit event" sub="Name, date, venue, cover photo and guest options." />
       <Card>
         <ActionForm action={updateEvent.bind(null, e.id)} submit="Save changes">
           <Field label="Event name" htmlFor="name">
@@ -33,6 +34,9 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               <Input id="ends_at" name="ends_at" type="datetime-local" required defaultValue={toLocalInput(e.ends_at)} />
             </Field>
           </div>
+          <Field label="Venue (optional)" htmlFor="venue" help="Shown under the event name, e.g. “The Majestic Hotel”.">
+            <Input id="venue" name="venue" maxLength={120} defaultValue={e.venue} />
+          </Field>
           <Field label="Message for guests" htmlFor="description">
             <Textarea id="description" name="description" maxLength={2000} defaultValue={e.description} />
           </Field>
@@ -54,7 +58,7 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
           />
           {f.custom_branding ? (
             <Field label="Accent colour" htmlFor="accent_color" help="Used for buttons on the guest page.">
-              <Input id="accent_color" name="accent_color" type="color" defaultValue={e.accent_color ?? "#e8553d"} className="h-11 w-24 p-1" />
+              <Input id="accent_color" name="accent_color" type="color" defaultValue={e.accent_color ?? "#e91d48"} className="h-11 w-24 p-1" />
             </Field>
           ) : null}
         </ActionForm>
@@ -99,6 +103,11 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
           </form>
         </Card>
       ) : null}
+
+      <Card className="grid gap-3 border-danger/30">
+        <h2 className="text-lg font-bold text-danger">Delete event</h2>
+        <DeleteEvent id={e.id} name={e.name} paid={!!e.paid_at} />
+      </Card>
     </div>
   );
 }
