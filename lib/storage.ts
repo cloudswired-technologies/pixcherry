@@ -76,7 +76,7 @@ export async function presignPut(key: string, contentType: string, contentLength
   return getSignedUrl(s3(), cmd, { expiresIn, signableHeaders: new Set(["content-type", "content-length"]) });
 }
 
-export async function putObject(key: string, body: Buffer, contentType: string, cacheControl = "public, max-age=604800, immutable") {
+export async function putObject(key: string, body: Buffer, contentType: string, cacheControl = "public, max-age=86400") {
   assertUsable();
   if (driver === "local") {
     const p = localPath(key);

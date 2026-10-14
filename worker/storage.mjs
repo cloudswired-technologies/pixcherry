@@ -3,7 +3,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-const CACHE = "public, max-age=604800, immutable";
+// One day: deleted photos must drop out of the Cloudflare cache soon after deletion.
+const CACHE = "public, max-age=86400";
 
 export function createStorage() {
   const driver = process.env.STORAGE_DRIVER ?? (process.env.R2_BUCKET ? "r2" : "local");
