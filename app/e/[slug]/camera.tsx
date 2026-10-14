@@ -5,6 +5,7 @@ import { Check, ChevronLeft, RefreshCw, RotateCcw } from "lucide-react";
 import { LOOKS, createRenderer, drawOverlays, polaroid, stampText, type Look, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, playShutter, unlockAudio } from "@/lib/client/camera-sounds";
 import type { Quality } from "@/lib/client/compress";
+import { TagPicker } from "./panels";
 
 // Disposable camera. GPU viewfinder with film looks (the photo is rendered by
 // the same shader), mechanical shutter + film-advance sounds, a review step
@@ -26,10 +27,12 @@ export function DisposableCamera({
   mission,
   onMission,
   caption,
+  suggestedTags,
 }: {
+  suggestedTags?: string[] | null;
   open?: boolean;
   onClose: () => void;
-  onShot: (file: File) => void;
+  onShot: (file: File, tags: string[]) => void;
   onFallback: () => void;
   shotsLeft: number;
   quality: Quality;
@@ -56,6 +59,7 @@ export function DisposableCamera({
   const [busy, setBusy] = useState(false);
   const [flyKey, setFlyKey] = useState(0);
   const [last, setLast] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const look = LOOKS[lookIdx];
   const lookRef = useRef<Look>(look);
   useEffect(() => {
@@ -232,7 +236,7 @@ export function DisposableCamera({
     if (!review) return;
     playAdvance();
     navigator.vibrate?.([10, 30, 10, 30, 10]);
-    onShot(review.file);
+    onShot(review.file, tags);
     setLast((old) => {
       if (old) URL.revokeObjectURL(old);
       return review.url;
@@ -363,6 +367,7 @@ export function DisposableCamera({
       {/* bottom controls */}
       {review ? (
         <div className="grid gap-3 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4">
+          {suggestedTags ? <TagPicker suggested={suggestedTags} value={tags} onChange={setTags} dark /> : null}
           <p className="text-center text-sm text-white/70">Happy with it? Only shared photos use a shot.</p>
           <div className="grid grid-cols-2 gap-3">
             <button type="button" onClick={retake} className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-white/25 font-semibold">

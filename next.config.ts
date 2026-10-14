@@ -13,6 +13,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Self-contained server bundle for the VPS (node .next/standalone/server.js).
   output: "standalone",
+  // The dev badge sits bottom-left, on top of the guest Upload button.
+  devIndicators: false,
   // lib/storage.ts has a dynamic local-storage path, so the tracer pulls in the
   // whole project folder. Never ship local data, credentials notes or test files.
   outputFileTracingExcludes: {

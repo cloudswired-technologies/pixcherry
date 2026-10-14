@@ -47,7 +47,7 @@ export function useUploader(opts: {
   const [items, setItems] = useState<Item[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(opts.remaining);
-  const files = useRef(new Map<string, { file: File; mission: string | null; prepared: boolean }>());
+  const files = useRef(new Map<string, { file: File; mission: string | null; prepared: boolean; tags: string[] }>());
   const active = useRef(0);
   const queue = useRef<string[]>([]);
   const pumpRef = useRef<() => void>(() => {});
@@ -62,7 +62,7 @@ export function useUploader(opts: {
 
   const run = useCallback(
     async (key: string) => {
-      const { file, mission, prepared } = files.current.get(key)!;
+      const { file, mission, prepared, tags } = files.current.get(key)!;
       const o = optsRef.current;
       patch(key, { status: "preparing" });
       let blob: Blob;
@@ -76,7 +76,7 @@ export function useUploader(opts: {
       const res = await fetch(`/api/e/${o.slug}/uploads`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ files: [{ type, size: blob.size, mission }] }),
+        body: JSON.stringify({ files: [{ type, size: blob.size, mission, tags }] }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string; uploads?: { id: string; url: string }[]; remaining?: number };
       if (res.status === 401 && body.code === "join") throw new StopError("Please join first.", true, true);
@@ -147,7 +147,7 @@ export function useUploader(opts: {
   }, [pump]);
 
   const add = useCallback(
-    (picked: FileList | File[], opts: { mission?: string | null; prepared?: boolean } = {}) => {
+    (picked: FileList | File[], opts: { mission?: string | null; prepared?: boolean; tags?: string[] } = {}) => {
       stopped.current = false;
       setNotice(null);
       const all = Array.from(picked).filter(looksLikeImage);
@@ -161,7 +161,7 @@ export function useUploader(opts: {
       if (msgs.length) setNotice(msgs.join(" "));
       const added: Item[] = take.map((f) => {
         const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        files.current.set(key, { file: f, mission: opts.mission ?? null, prepared: !!opts.prepared });
+        files.current.set(key, { file: f, mission: opts.mission ?? null, prepared: !!opts.prepared, tags: opts.tags ?? [] });
         return { key, name: f.name, preview: URL.createObjectURL(f), status: "queued", progress: 0 };
       });
       setItems((l) => [...added, ...l]);

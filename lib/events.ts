@@ -12,6 +12,8 @@ export type EventRow = {
   name: string;
   description: string;
   venue: string;
+  thank_you: string;
+  suggested_tags: string[];
   starts_at: Date;
   ends_at: Date;
   cover_key: string | null;

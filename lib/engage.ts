@@ -128,6 +128,20 @@ export async function listPeople(eventId: string, limit = 200): Promise<Person[]
   return rows.map((r) => ({ id: r.id, name: r.name, count: r.count, hearts: r.hearts, cover: r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).sm) : null }));
 }
 
+export type TagAlbum = { tag: string; count: number; cover: string | null };
+
+/** One "album" per hashtag, biggest first, with the most loved photo as cover. */
+export async function listTagAlbums(eventId: string): Promise<TagAlbum[]> {
+  const rows = await q<{ tag: string; count: number; cover_id: string }>(
+    `select t.tag, count(*)::int as count, (array_agg(p.id order by p.vote_count desc, p.ready_at desc))[1] as cover_id
+     from photos p cross join lateral unnest(p.tags) as t(tag)
+     where p.event_id = $1 and p.status = 'ready'
+     group by t.tag order by count(*) desc, t.tag limit 40`,
+    [eventId],
+  );
+  return rows.map((r) => ({ tag: r.tag, count: r.count, cover: r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).md) : null }));
+}
+
 export type Stats = {
   photos: number;
   guests: number; // contributors (guests with at least one photo)

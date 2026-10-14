@@ -2,6 +2,7 @@ import "server-only";
 import { one, q, tx } from "@/lib/db";
 import type { EventWithConfig } from "@/lib/events";
 import { deletePrefix, deleteObject, photoKeys, presignPut, publicUrl } from "@/lib/storage";
+import { cleanTags } from "@/lib/tags";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const MAX_FILES_PER_REQUEST = 10;
@@ -15,7 +16,7 @@ const UUID = /^[0-9a-f-]{36}$/;
  * many files as the guest and event quotas allow (possibly fewer than asked).
  * A file may name a snap mission; unknown missions are dropped silently.
  */
-export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number; mission?: string | null }[]) {
+export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number; mission?: string | null; tags?: unknown }[]) {
   const maxBytes = e.cfg.limits.max_file_mb * 1024 * 1024;
   for (const f of files) {
     if (!(ACCEPTED_TYPES as readonly string[]).includes(f.type)) return { error: "Only JPEG, PNG or WebP photos can be uploaded." } as const;
@@ -44,8 +45,8 @@ export async function reserveUploads(e: EventWithConfig, guestId: string, files:
     const rows: { id: string; type: string; size: number }[] = [];
     for (const f of files.slice(0, n)) {
       const r = await one<{ id: string }>(
-        "insert into photos (event_id, guest_id, content_type, declared_bytes, mission_id) values ($1, $2, $3, $4, $5) returning id",
-        [e.id, guestId, f.type, f.size, f.mission && valid.has(f.mission) ? f.mission : null],
+        "insert into photos (event_id, guest_id, content_type, declared_bytes, mission_id, tags) values ($1, $2, $3, $4, $5, $6) returning id",
+        [e.id, guestId, f.type, f.size, f.mission && valid.has(f.mission) ? f.mission : null, e.cfg.features.tags ? cleanTags(f.tags) : []],
         c,
       );
       rows.push({ id: r!.id, type: f.type, size: f.size });
@@ -97,6 +98,7 @@ export type GalleryPhoto = {
   votes: number;
   voted: boolean;
   mission: string | null;
+  tags: string[];
 };
 
 type Row = {
@@ -110,6 +112,7 @@ type Row = {
   vote_count: number;
   voted: boolean;
   mission_id: string | null;
+  tags: string[];
 };
 
 function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto {
@@ -129,6 +132,7 @@ function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto
     votes: r.vote_count,
     voted: r.voted,
     mission: r.mission_id,
+    tags: r.tags ?? [],
   };
 }
 
@@ -141,6 +145,7 @@ export type ListOptions = {
   since?: string | null;
   byGuest?: string | null; // folder: one uploader
   mission?: string | null;
+  tag?: string | null;
 };
 
 /**
@@ -156,6 +161,7 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   })`;
   if (opts.byGuest && UUID.test(opts.byGuest)) where += ` and p.guest_id = $${params.push(opts.byGuest)}::uuid`;
   if (opts.mission && UUID.test(opts.mission)) where += ` and p.mission_id = $${params.push(opts.mission)}::uuid`;
+  if (opts.tag && /^[a-z0-9_]{2,24}$/.test(opts.tag)) where += ` and $${params.push(opts.tag)} = any(p.tags)`;
   let order: string;
   let offset = 0;
   if (opts.order === "top") {
@@ -173,7 +179,7 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   }
   if (opts.since && !Number.isNaN(Date.parse(opts.since))) where += ` and p.ready_at > $${params.push(opts.since)}::timestamptz`;
   const rows = await q<Row>(
-    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id,
+    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags,
        exists (select 1 from photo_votes v where v.photo_id = p.id and v.guest_id = ${viewerParam}) as voted
      from photos p left join guests g on g.id = p.guest_id
      where ${where} order by ${order} limit ${limit + 1} offset ${offset}`,

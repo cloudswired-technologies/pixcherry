@@ -19,7 +19,9 @@ export function Viewer({
   missions,
   onFolder,
   total,
+  onTag,
 }: {
+  onTag?: (tag: string) => void;
   slug: string;
   photos: GalleryPhoto[];
   index: number;
@@ -160,6 +162,15 @@ export function Viewer({
             <div className="text-xs text-white/60">{new Date(ph.at).toLocaleString("en-MY", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
           </div>
         </div>
+        {ph.tags?.length ? (
+          <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+            {ph.tags.map((t) => (
+              <button key={t} type="button" onClick={() => onTag?.(t)} className="shrink-0 rounded-full bg-white/12 px-3 py-1 text-xs font-semibold">
+                #{t}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div ref={strip} className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {photos.map((p, i) => (
             <button key={p.id} type="button" data-i={i} onClick={() => go(i)} className={`size-12 shrink-0 overflow-hidden rounded-lg border-2 ${i === index ? "border-white" : "border-transparent opacity-60"}`}>

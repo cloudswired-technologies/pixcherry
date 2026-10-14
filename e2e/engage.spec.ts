@@ -125,7 +125,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g2.locator("li", { hasText: "Amir" })).toBeVisible({ timeout: 25_000 });
 
   // Wishes.
-  await g2.getByRole("button", { name: "Write a wish" }).click();
+  await g2.getByRole("navigation", { name: "Actions" }).getByRole("button", { name: "Wishes" }).click();
   await g2.getByRole("textbox").fill("Congratulations Aina & Hakim! Bahagia selalu ❤️");
   await g2.getByRole("button", { name: "Send wish" }).click();
   await expect(g2.getByText("Congratulations Aina & Hakim! Bahagia selalu ❤️")).toBeVisible();

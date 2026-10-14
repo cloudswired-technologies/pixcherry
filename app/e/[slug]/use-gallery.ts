@@ -6,12 +6,13 @@ import type { GalleryPhoto } from "@/lib/photos";
 // Paged gallery feed with filters (order / one guest's folder / one mission)
 // and polling for new photos while the newest-first view is open.
 
-export type GalleryFilter = { order: "new" | "old" | "top"; guest: string | null; mission: string | null };
+export type GalleryFilter = { order: "new" | "old" | "top"; guest: string | null; mission: string | null; tag?: string | null };
 
 function qs(f: GalleryFilter, extra: Record<string, string> = {}) {
   const u = new URLSearchParams({ order: f.order, ...extra });
   if (f.guest) u.set("guest", f.guest);
   if (f.mission) u.set("mission", f.mission);
+  if (f.tag) u.set("tag", f.tag);
   return u;
 }
 
@@ -20,7 +21,7 @@ export function useGallery(slug: string, filter: GalleryFilter, initial?: { phot
   const [next, setNext] = useState<string | null>(initial?.next ?? null);
   const [loading, setLoading] = useState(!initial);
   const latest = useRef<string | null>(initial?.photos[0]?.at ?? null);
-  const key = `${filter.order}|${filter.guest ?? ""}|${filter.mission ?? ""}`;
+  const key = `${filter.order}|${filter.guest ?? ""}|${filter.mission ?? ""}|${filter.tag ?? ""}`;
   const keyRef = useRef(key);
   const first = useRef(!!initial);
 

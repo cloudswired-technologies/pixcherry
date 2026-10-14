@@ -74,6 +74,9 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
                 <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline" size="sm">
                   <Pencil aria-hidden /> Edit details
                 </LinkButton>
+                <a href={`${guestUrl(APP_URL, e.slug)}/recap`} target="_blank" rel="noreferrer" className={btn("outline", "sm")}>
+                  ✨ Recap
+                </a>
                 <a href={guestUrl(APP_URL, e.slug)} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
                   <ExternalLink aria-hidden /> Guest page
                 </a>

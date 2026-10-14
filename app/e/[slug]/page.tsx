@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/ui";
-import { eventStats, listMissions, missionsDoneBy } from "@/lib/engage";
+import { eventStats, listMissions, listTagAlbums, missionsDoneBy } from "@/lib/engage";
+import { suggestedTags } from "@/lib/tags";
 import { coverUrl, getEventBySlug, logoUrl } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 import { currentGuest } from "@/lib/guests";
-import { uploadsOpen } from "@/lib/limits";
+import { eventPhase, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
 import { turnstileSiteKey } from "@/lib/turnstile";
 import { GuestApp } from "./guest-app";
@@ -35,11 +36,12 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
   }
   const guest = await currentGuest(e.id);
   const f = e.cfg.features;
-  const [first, missions, done, stats] = await Promise.all([
+  const [first, missions, done, stats, tagAlbums] = await Promise.all([
     listPhotos(e.id, { order: "new", limit: 60, viewer: guest?.id ?? null }),
     f.missions ? listMissions(e.id) : Promise.resolve([]),
     f.missions && guest ? missionsDoneBy(guest.id) : Promise.resolve([]),
     eventStats(e.id),
+    f.tags ? listTagAlbums(e.id) : Promise.resolve([]),
   ]);
   return (
     <GuestApp
@@ -56,8 +58,11 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
         askName: e.ask_guest_name,
         review: f.moderation && e.require_approval,
         cameraOnly: f.camera && e.camera_only,
+        ended: eventPhase(e) === "ended",
       }}
-      features={{ camera: f.camera, wishes: f.wishes, voting: f.voting, missions: f.missions, albumDownload: f.guest_album_download }}
+      features={{ camera: f.camera, wishes: f.wishes, voting: f.voting, missions: f.missions, albumDownload: f.guest_album_download, tags: f.tags }}
+      suggestedTags={suggestedTags(e)}
+      tagAlbums={tagAlbums}
       canUpload={uploadsOpen(e, e.cfg)}
       guest={guest ? { id: guest.id, name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
       limits={{ perGuest: e.cfg.limits.photos_per_guest, maxBytes: e.cfg.limits.max_file_mb * 1024 * 1024 }}

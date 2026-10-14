@@ -22,6 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     viewer: guest?.id ?? null,
     byGuest: u.searchParams.get("guest"),
     mission: e.cfg.features.missions ? u.searchParams.get("mission") : null,
+    tag: e.cfg.features.tags ? u.searchParams.get("tag") : null,
     limit: Number(u.searchParams.get("limit")) || 60,
   });
   return NextResponse.json({ ...r, count: e.photo_count }, { headers: { "cache-control": "no-store" } });

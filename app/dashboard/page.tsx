@@ -12,7 +12,10 @@ export const metadata = { title: "My events" };
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const { deleted } = await searchParams;
   const user = await requireUser();
-  const events = await listOwnerEvents(user.id);
+  const all = await listOwnerEvents(user.id);
+  // Deleted events leave the list; their receipts stay reachable below.
+  const events = all.filter((e) => !e.purged_at);
+  const gone = all.filter((e) => e.purged_at);
   return (
     <div className="grid gap-6">
       <PageHeader
@@ -64,6 +67,23 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           })}
         </div>
       )}
+      {gone.length ? (
+        <details className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <summary className="cursor-pointer font-semibold text-muted-foreground">Deleted events ({gone.length})</summary>
+          <ul className="mt-3 divide-y divide-border">
+            {gone.map((e) => (
+              <li key={e.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0 truncate">
+                  {e.name} <span className="text-muted-foreground">· {formatDate(e.starts_at)}</span>
+                </span>
+                <Link href={`/dashboard/events/${e.id}`} className="shrink-0 font-semibold text-brand">
+                  Receipts
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

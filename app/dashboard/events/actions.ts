@@ -8,6 +8,7 @@ import { one, q, tx } from "@/lib/db";
 import { getManagedEvent, refreshDeletion, uniqueSlug } from "@/lib/events";
 import { parseLocalDateTime } from "@/lib/format";
 import { MISSION_PRESETS, setWishHidden } from "@/lib/engage";
+import { cleanTags } from "@/lib/tags";
 import { approvePhotos, deletePhoto } from "@/lib/photos";
 import { PaymentError, startPurchase, type PurchaseKind } from "@/lib/payments";
 import { rateLimit } from "@/lib/rate-limit";
@@ -30,13 +31,15 @@ function readDetails(fd: FormData) {
   const name = String(fd.get("name") ?? "").trim().slice(0, 120);
   const description = String(fd.get("description") ?? "").trim().slice(0, 2000);
   const venue = String(fd.get("venue") ?? "").replace(/[<>]/g, "").trim().slice(0, 120);
+  const thankYou = String(fd.get("thank_you") ?? "").replace(/[<>]/g, "").trim().slice(0, 1000);
+  const tags = cleanTags(String(fd.get("suggested_tags") ?? ""), 12);
   const starts = parseLocalDateTime(String(fd.get("starts_at") ?? ""));
   const ends = parseLocalDateTime(String(fd.get("ends_at") ?? ""));
   if (!name) return { error: "Give your event a name." } as const;
   if (!starts || !ends) return { error: "Enter when the event starts and ends." } as const;
   if (ends < starts) return { error: "The end must be after the start." } as const;
   if (ends.getTime() - starts.getTime() > 14 * 86400_000) return { error: "An event can last at most 14 days." } as const;
-  return { name, description, venue, starts, ends } as const;
+  return { name, description, venue, thankYou, tags, starts, ends } as const;
 }
 
 export async function createEvent(_: FormState, fd: FormData): Promise<FormState> {
@@ -64,7 +67,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
   await tx(async (c) => {
     await q(
       `update events set name = $2, description = $3, starts_at = $4, ends_at = $5, ask_guest_name = $6, uploads_enabled = $7,
-         require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, updated_at = now() where id = $1`,
+         require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, thank_you = $12, suggested_tags = $13, updated_at = now() where id = $1`,
       [
         e.id,
         d.name,
@@ -77,6 +80,8 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         branding && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null,
         e.cfg.features.camera && fd.get("camera_only") === "on",
         d.venue,
+        d.thankYou,
+        d.tags,
       ],
       c,
     );

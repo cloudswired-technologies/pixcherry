@@ -6,6 +6,7 @@ import { coverUrl, getManagedEvent, logoUrl } from "@/lib/events";
 import { toLocalInput } from "@/lib/format";
 import { regenerateLink, updateEvent, uploadCover, uploadLogo } from "../../actions";
 import { DeleteEvent } from "./delete-event";
+import { suggestedTags } from "@/lib/tags";
 
 export const metadata = { title: "Event settings" };
 
@@ -39,6 +40,14 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
           </Field>
           <Field label="Message for guests" htmlFor="description">
             <Textarea id="description" name="description" maxLength={2000} defaultValue={e.description} />
+          </Field>
+          {f.tags ? (
+            <Field label="Hashtags guests can tap" htmlFor="suggested_tags" help="Separate with spaces. Each hashtag becomes an album in Highlights. Guests can also type their own.">
+              <Input id="suggested_tags" name="suggested_tags" defaultValue={suggestedTags(e).map((t) => `#${t}`).join(" ")} />
+            </Field>
+          ) : null}
+          <Field label="Thank-you message (optional)" htmlFor="thank_you" help="Shown on the recap page after the event — a little note from you to your guests.">
+            <Textarea id="thank_you" name="thank_you" maxLength={1000} defaultValue={e.thank_you} placeholder="Thank you for celebrating with us. These photos mean the world to us! — Aina & Hakim" />
           </Field>
           <Toggle name="ask_guest_name" label="Ask guests for their name" help="Shown next to their photos. Guests can still skip it." defaultChecked={e.ask_guest_name} />
           <Toggle name="uploads_enabled" label="Accept uploads" help="Turn off to stop new photos. The gallery stays open." defaultChecked={e.uploads_enabled} />

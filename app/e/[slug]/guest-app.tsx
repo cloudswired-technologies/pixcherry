@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import confetti from "canvas-confetti";
-import { ArrowRight, Calendar, Camera, ChevronLeft, Download, Heart, ImagePlus, Images, Loader2, MapPin, MessageCircleHeart, Share2, User, Users } from "lucide-react";
+import { ArrowRight, Calendar, Camera, ChevronLeft, Download, ImagePlus, Images, Loader2, MapPin, MessageCircleHeart, MoreHorizontal, PartyPopper, Share2, Sparkles, User, Users } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { Turnstile } from "@/components/turnstile";
 import type { Quality } from "@/lib/client/compress";
 import { useUploader } from "@/lib/client/uploader";
+import { makeShareCard } from "@/lib/client/share-card";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, type JoinState } from "./actions";
 import { DisposableCamera } from "./camera";
@@ -32,7 +33,8 @@ import {
 import { useGallery, type GalleryFilter } from "./use-gallery";
 import { Viewer } from "./viewer";
 
-type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean };
+type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean };
+type TagAlbum = { tag: string; count: number; cover: string | null };
 
 type Props = {
   slug: string;
@@ -48,6 +50,7 @@ type Props = {
     askName: boolean;
     review: boolean;
     cameraOnly: boolean;
+    ended: boolean;
   };
   features: Features;
   canUpload: boolean;
@@ -57,7 +60,9 @@ type Props = {
   initial: { photos: GalleryPhoto[]; next: string | null; count: number };
   missions: MissionInfo[];
   missionsDone: string[];
-  stats: Omit<Stats, "missions" | "missionsDone">;
+  stats: Omit<Stats, "missions" | "missionsDone" | "tagAlbums">;
+  suggestedTags: string[];
+  tagAlbums: TagAlbum[];
   siteKey: string | null;
 };
 
@@ -65,13 +70,13 @@ type Tab = "highlights" | "people" | "all" | "wishes";
 /** A filtered photo list opened from Highlights / People. */
 type Album = { title: string; subtitle?: string; filter: GalleryFilter; person?: PersonItem } | null;
 type Pending = { kind: "camera" | "upload" | "wish" | "join"; mission?: string | null } | null;
-type Stats = { photos: number; guests: number; joined: number; wishes: number; topSnappers: Snapper[]; topPhotos: TopPhoto[]; missions: MissionInfo[]; missionsDone: string[] };
+type Stats = { photos: number; guests: number; joined: number; wishes: number; topSnappers: Snapper[]; topPhotos: TopPhoto[]; missions: MissionInfo[]; missionsDone: string[]; tagAlbums: TagAlbum[] };
 
 const ALL: GalleryFilter = { order: "new", guest: null, mission: null };
 
 export function GuestApp(p: Props) {
   const [joined, setJoined] = useState(p.guest);
-  const [tab, setTab] = useState<Tab>(p.features.missions && p.missions.length ? "highlights" : "all");
+  const [tab, setTab] = useState<Tab>(p.features.tags || (p.features.missions && p.missions.length) ? "highlights" : "all");
   const [album, setAlbum] = useState<Album>(null);
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
   const [open, setOpen] = useState<{ list: "all" | "album"; i: number } | null>(null);
@@ -82,15 +87,18 @@ export function GuestApp(p: Props) {
   const [wishKey, setWishKey] = useState(0);
   const [peopleKey, setPeopleKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [picks, setPicks] = useState<{ key: string; file: File; url: string }[]>([]);
   const [pickMissionId, setPickMissionId] = useState<string | null>(null);
   // First paint uses numbers computed on the server (no "0 guests" flash), then polls.
-  const [stats, setStats] = useState<Stats>({ ...p.stats, missions: p.missions, missionsDone: p.missionsDone });
+  const [stats, setStats] = useState<Stats>({ ...p.stats, missions: p.missions, missionsDone: p.missionsDone, tagAlbums: p.tagAlbums });
+  const [pickTags, setPickTags] = useState<string[]>([]);
   const pick = useRef<HTMLInputElement>(null);
   const statsRef = useRef(p.initial.count);
   const tabsRef = useRef<HTMLDivElement>(null);
   const f = p.features;
-  const style = { "--accent": p.event.accent } as CSSProperties;
+  // Custom branding: the organiser's colour replaces the cherry everywhere on this page.
+  const style = { "--accent": p.event.accent, "--brand": p.event.accent, "--brand-strong": p.event.accent } as CSSProperties;
 
   const all = useGallery(p.slug, { ...ALL, order: order === "top" && !f.voting ? "new" : order }, order === "new" ? { photos: p.initial.photos, next: p.initial.next } : undefined);
   const albumFilter = album?.filter ?? { order: "top" as const, guest: null, mission: null };
@@ -196,6 +204,10 @@ export function GuestApp(p: Props) {
   const openPerson = (person: PersonItem) =>
     openAlbum({ title: `Photos by ${person.name ?? "Guest"}`, subtitle: `${person.count} photo${person.count === 1 ? "" : "s"}`, person, filter: { order: "new", guest: person.id, mission: null } });
   const openMission = (m: MissionInfo) => openAlbum({ title: m.title, subtitle: `${m.count} photo${m.count === 1 ? "" : "s"}`, filter: { order: "new", guest: null, mission: m.id } });
+  const openTag = (tag: string) => {
+    const a = stats.tagAlbums.find((x) => x.tag === tag);
+    openAlbum({ title: `#${tag}`, subtitle: a ? `${a.count} photo${a.count === 1 ? "" : "s"}` : undefined, filter: { order: "new", guest: null, mission: null, tag } });
+  };
   const openTop = () => openAlbum({ title: "Most loved", subtitle: "The photos guests hearted most", filter: { order: "top", guest: null, mission: null } });
   const myPhotos = () => joined && openAlbum({ title: "My photos", filter: { order: "new", guest: joined.id, mission: null } });
 
@@ -206,10 +218,40 @@ export function GuestApp(p: Props) {
   const sharePicks = () => {
     up.add(
       picks.map((x) => x.file),
-      { mission: pickMissionId },
+      { mission: pickMissionId, tags: pickTags },
     );
+    setPickTags([]);
     picks.forEach((x) => URL.revokeObjectURL(x.url));
     setPicks([]);
+  };
+
+  const shareCard = async () => {
+    if (!joined) return setJoinFor({ kind: "join" });
+    const mine = all.photos.filter((x) => x.mine && x.status === "ready");
+    const count = people?.find((x) => x.id === joined.id)?.count ?? mine.length;
+    if (!mine.length) return flash("Share a photo first, then make your story card 📸");
+    flash("Making your story card…");
+    try {
+      const blob = await makeShareCard({
+        eventName: p.event.name,
+        date: p.event.date,
+        count,
+        photoUrls: mine.slice(0, 3).map((x) => `/api/e/${p.slug}/photos/${x.id}/download`),
+        accent: p.event.accent,
+        guestName: null,
+      });
+      const file = new File([blob], "pixcherry-story.jpg", { type: "image/jpeg" });
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+      else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }
+    } catch {
+      /* cancelled */
+    }
   };
 
   const shotsLeft = up.available;
@@ -222,126 +264,58 @@ export function GuestApp(p: Props) {
     { id: "all", label: "All Photos", show: true },
     { id: "wishes", label: "Wishes", show: f.wishes },
   ];
-  const coverPhotos = all.photos.slice(0, 3);
 
   return (
-    <div style={style} className="min-h-dvh bg-paper pb-32">
+    <div style={style} className="min-h-dvh bg-paper pb-28">
       {/* ------------------------------------------------------------ top bar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           {p.event.logo ? <img src={p.event.logo} alt="" className="h-8 w-auto" /> : <Logo className="text-lg" />}
-          <button
-            type="button"
-            onClick={() => (navigator.share ? navigator.share({ title: p.event.name, url: location.href }).catch(() => {}) : navigator.clipboard?.writeText(location.href).then(() => flash("Link copied ✨")))}
-            className="grid size-10 place-items-center rounded-full hover:bg-muted"
-            aria-label="Share this album"
-          >
-            <Share2 className="size-5" aria-hidden />
-          </button>
         </div>
       </header>
 
-      {/* ------------------------------------------------------------ hero */}
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-4 pb-6 pt-6">
-        <div className="relative mx-auto max-w-md">
-          <div className="relative -rotate-2 bg-white p-3 pb-4 shadow-lift">
-            <span className="absolute -top-3 left-8 h-6 w-20 rotate-[-6deg] bg-[#efe3cf]/90 shadow-sm" aria-hidden />
-            <span className="absolute -top-3 right-10 h-6 w-16 rotate-[8deg] bg-[#efe3cf]/90 shadow-sm" aria-hidden />
-            <div className="aspect-[4/3] overflow-hidden bg-muted">
-              {p.event.cover ? (
-                <img src={p.event.cover} alt="" className="size-full object-cover" />
-              ) : coverPhotos.length ? (
-                <div className="grid size-full grid-cols-3 gap-1">
-                  {coverPhotos.map((c, i) => (
-                    <img key={c.id} src={c.md} alt="" className={`size-full object-cover ${i === 0 ? "col-span-2 row-span-2" : ""}`} />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid size-full place-items-center bg-gradient-to-br from-brand-soft to-[#ffd0da]">
-                  <Camera className="size-14 text-brand/70" aria-hidden />
-                </div>
-              )}
-            </div>
-          </div>
-          <p className="absolute -right-1 -top-2 rotate-6 rounded-sm bg-white/95 px-2 py-1 font-script text-lg leading-tight text-ink shadow-soft sm:-right-6">
-            Every guest.
-            <br />
-            Every angle.
-            <br />
-            Every memory. <span className="text-brand">♡</span>
-          </p>
-          <div className="pointer-events-none absolute -bottom-3 -left-4 h-10 w-24 -rotate-12 rounded-sm bg-ink [background-image:repeating-linear-gradient(90deg,transparent_0_6px,#fff_6px_10px,transparent_10px_16px)] [background-size:16px_8px] [background-repeat:repeat-x] [background-position:0_2px,0_bottom]" aria-hidden />
-        </div>
-
-        <h1 className="mt-8 text-center font-script text-5xl font-bold leading-none text-ink sm:text-6xl">{p.event.name}</h1>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Calendar className="size-4" aria-hidden /> {p.event.date}
-          </span>
-          {p.event.venue ? (
-            <span className="inline-flex items-center gap-1.5">
-              <MapPin className="size-4" aria-hidden /> {p.event.venue}
-            </span>
-          ) : null}
-        </div>
-        {p.event.description ? <p className="mx-auto mt-3 max-w-md whitespace-pre-line text-center text-sm text-muted-foreground">{p.event.description}</p> : null}
-
-        <div className="mx-auto mt-5 grid max-w-md grid-cols-3 divide-x divide-border rounded-3xl bg-white py-4 text-center shadow-soft">
-          {[
-            { icon: Camera, n: stats.photos, l: "Photos" },
-            { icon: Users, n: stats.guests, l: "Contributors" },
-            { icon: User, n: stats.joined, l: "Guests" },
-          ].map((s) => (
-            <div key={s.l} className="grid justify-items-center gap-0.5">
-              <s.icon className="size-5 text-brand" aria-hidden />
-              <span className="text-xl font-extrabold tabular-nums">{s.n.toLocaleString("en-MY")}</span>
-              <span className="text-xs text-muted-foreground">{s.l}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mx-auto mt-5 grid max-w-md gap-3">
-          <button type="button" onClick={scrollToTabs} className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-brand text-lg font-bold text-white shadow-cherry">
-            View Gallery <ArrowRight className="size-5" aria-hidden />
-          </button>
-          {canShoot ? (
-            <button type="button" onClick={() => start(f.camera ? "camera" : "upload")} className="mx-auto inline-flex h-12 items-center gap-2 rounded-full border border-border bg-white px-6 font-semibold shadow-soft">
-              <ImagePlus className="size-5" aria-hidden /> Share Your Photos
-            </button>
-          ) : (
-            <p className="text-center text-sm text-muted-foreground">Uploads are closed. Browse and save your favourites below.</p>
-          )}
-          {joined ? (
-            <p className="text-center text-sm">
-              Hi <strong>{joined.name ?? "there"}</strong> 👋{" "}
-              {canShoot ? (
-                <span className="text-muted-foreground">
-                  You have <strong className="text-ink">{shotsLeft}</strong> shot{shotsLeft === 1 ? "" : "s"} left.
+      {/* ------------------------------------------------------------ header (compact) */}
+      <section className="mx-auto max-w-3xl px-4 pt-4">
+        <div className="overflow-hidden rounded-3xl bg-white shadow-soft">
+          {p.event.cover ? <img src={p.event.cover} alt="" className="aspect-[16/7] w-full object-cover" /> : null}
+          <div className="p-4">
+            <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-ink">{p.event.name}</h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="size-4" aria-hidden /> {p.event.date}
+              </span>
+              {p.event.venue ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-4" aria-hidden /> {p.event.venue}
                 </span>
               ) : null}
-            </p>
-          ) : null}
-          {joined?.blocked ? <p className="rounded-2xl bg-muted px-4 py-3 text-center text-sm text-muted-foreground">Uploads from this phone were turned off by the organiser.</p> : null}
-          {p.event.review && canShoot ? <p className="text-center text-xs text-muted-foreground">Photos appear once the hosts approve them.</p> : null}
-        </div>
-        <p className="mt-5 text-right font-script text-xl text-ink/80">
-          Good people, great memories <span className="text-brand">♥</span>
-        </p>
-      </section>
-
-      {/* ------------------------------------------------------------ quick actions */}
-      <section className="mx-auto max-w-3xl px-4">
-        <div className="grid grid-cols-4 gap-2 rounded-3xl bg-ink p-3 text-white shadow-lift">
-          {canShoot ? (
-            <QuickAction icon={Camera} label={f.camera ? "Snap" : "Upload"} onClick={() => start(f.camera ? "camera" : "upload")} />
-          ) : null}
-          <QuickAction icon={Images} label="Gallery" onClick={() => (setAlbum(null), setTab("all"), scrollToTabs())} />
-          <QuickAction icon={User} label="My photos" onClick={() => (joined ? myPhotos() : setJoinFor({ kind: "join" }))} />
-          {f.albumDownload ? (
-            <QuickAction icon={Download} label="Download" href={`/api/e/${p.slug}/album`} />
-          ) : f.wishes && !joined?.blocked && p.canUpload ? (
-            <QuickAction icon={MessageCircleHeart} label="Wish" onClick={() => start("wish")} />
-          ) : null}
+            </div>
+            {p.event.description ? <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{p.event.description}</p> : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2.5 py-1 text-brand">
+                <Camera className="size-3.5" aria-hidden /> {stats.photos.toLocaleString("en-MY")} photo{stats.photos === 1 ? "" : "s"}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-ink/80">
+                <Users className="size-3.5" aria-hidden /> {stats.guests} contributor{stats.guests === 1 ? "" : "s"}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-ink/80">
+                <User className="size-3.5" aria-hidden /> {stats.joined} guest{stats.joined === 1 ? "" : "s"}
+              </span>
+            </div>
+            {joined ? (
+              <p className="mt-3 text-sm">
+                Hi <strong>{joined.name ?? "there"}</strong> 👋{" "}
+                {canShoot ? (
+                  <span className="text-muted-foreground">
+                    You have <strong className="text-ink">{shotsLeft}</strong> shot{shotsLeft === 1 ? "" : "s"} left.
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+            {!p.canUpload ? <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-sm text-muted-foreground">Uploads are closed. Browse and save your favourites below.</p> : null}
+            {joined?.blocked ? <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-sm text-muted-foreground">Uploads from this phone were turned off by the organiser.</p> : null}
+            {p.event.review && canShoot ? <p className="mt-2 text-xs text-muted-foreground">Photos appear once the hosts approve them.</p> : null}
+          </div>
         </div>
       </section>
 
@@ -377,7 +351,7 @@ export function GuestApp(p: Props) {
 
       {/* ------------------------------------------------------------ tabs */}
       <div ref={tabsRef} className="scroll-mt-14" />
-      <nav className="sticky top-14 z-20 mt-6 border-b border-border bg-paper/95 backdrop-blur">
+      <nav className="sticky top-14 z-20 mt-4 border-b border-border bg-paper/95 backdrop-blur">
         <div className="no-scrollbar mx-auto flex max-w-3xl gap-1 overflow-x-auto px-3">
           {tabs
             .filter((t) => t.show)
@@ -426,8 +400,40 @@ export function GuestApp(p: Props) {
           </section>
         ) : tab === "highlights" ? (
           <div className="grid gap-4 px-2">
+            {p.event.ended ? (
+              <Link href={`/e/${p.slug}/recap`} className="flex items-center gap-3 rounded-3xl bg-ink p-4 text-white shadow-lift">
+                <span className="text-3xl">✨</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold">The recap is ready</span>
+                  <span className="block text-sm text-white/70">The whole day in numbers, the most loved photos and every wish.</span>
+                </span>
+                <ArrowRight className="size-5 shrink-0" aria-hidden />
+              </Link>
+            ) : null}
             {f.missions ? <MissionsProgress missions={stats.missions} done={done} canShoot={canShoot} onPick={(id) => (canShoot ? start(f.camera ? "camera" : "upload", id) : openMission(missionMap.get(id)!))} /> : null}
             {f.voting && stats.topPhotos.length ? <AlbumCard title="Most loved" subtitle={`${stats.topPhotos[0].votes} ❤️ on the top photo`} cover={stats.topPhotos[0].md} onClick={openTop} tall /> : null}
+            {f.tags ? (
+              stats.tagAlbums.length ? (
+                <section>
+                  <h3 className="mb-3 px-1 font-bold">Albums</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {stats.tagAlbums.map((a, i) => (
+                      <div key={a.tag} className={i === 0 ? "col-span-2" : ""}>
+                        <AlbumCard title={`#${a.tag}`} subtitle={`${a.count} photo${a.count === 1 ? "" : "s"}`} cover={a.cover} onClick={() => openTag(a.tag)} tall={i === 0} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                <section className="rounded-3xl border-2 border-dashed border-brand/25 bg-white p-5 text-center">
+                  <div className="text-3xl">#️⃣</div>
+                  <h3 className="mt-1 font-bold">Albums appear here</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    When you share a photo, tap a hashtag like <strong className="text-brand">#{p.suggestedTags[0] ?? "reception"}</strong> or <strong className="text-brand">#{p.suggestedTags[1] ?? "family"}</strong> — every hashtag becomes an album.
+                  </p>
+                </section>
+              )
+            ) : null}
             {f.missions && stats.missions.some((m) => m.count) ? (
               <div className="grid grid-cols-2 gap-3">
                 {stats.missions
@@ -500,35 +506,57 @@ export function GuestApp(p: Props) {
         </footer>
       ) : null}
 
-      {/* ------------------------------------------------------------ floating actions */}
-      {canShoot || (f.wishes && !joined?.blocked && p.canUpload) ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-white/95 p-1.5 shadow-lift backdrop-blur">
-            {canShoot && f.camera ? (
-              <button type="button" onClick={() => start("camera")} disabled={!!joined && shotsLeft <= 0} className="inline-flex h-12 items-center gap-2 rounded-full bg-brand px-6 font-bold text-white shadow-cherry disabled:opacity-50">
-                <Camera className="size-5" aria-hidden /> Snap
-              </button>
-            ) : null}
-            {canShoot && !(f.camera && p.event.cameraOnly) ? (
-              <button
-                type="button"
-                onClick={() => start("upload")}
-                disabled={!!joined && shotsLeft <= 0}
-                className={f.camera ? "grid size-12 place-items-center rounded-full bg-muted disabled:opacity-50" : "inline-flex h-12 items-center gap-2 rounded-full bg-brand px-6 font-bold text-white shadow-cherry disabled:opacity-50"}
-                aria-label="Upload"
-              >
-                <ImagePlus className="size-5" aria-hidden />
-                {f.camera ? null : "Upload Photos"}
-              </button>
-            ) : null}
-            {f.wishes && !joined?.blocked && p.canUpload ? (
-              <button type="button" onClick={() => start("wish")} className="grid size-12 place-items-center rounded-full bg-muted" aria-label="Write a wish">
-                <Heart className="size-5" aria-hidden />
-              </button>
-            ) : null}
-          </div>
+      {/* ------------------------------------------------------------ bottom menu (one place for every action) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur" aria-label="Actions">
+        <div className="mx-auto grid max-w-md grid-cols-4 items-end px-2 pt-1.5">
+          <BarButton icon={ImagePlus} label="Upload" onClick={() => start("upload")} disabled={!canShoot || (f.camera && p.event.cameraOnly) || (!!joined && shotsLeft <= 0)} />
+          {f.camera ? (
+            <button type="button" onClick={() => start("camera")} disabled={!canShoot || (!!joined && shotsLeft <= 0)} className="-mt-6 grid justify-items-center gap-1 pb-1.5 text-[11px] font-bold text-brand disabled:opacity-40" aria-label="Snap">
+              <span className="grid size-14 place-items-center rounded-full border-4 border-white bg-brand text-white shadow-cherry">
+                <Camera className="size-6" aria-hidden />
+              </span>
+              Snap
+            </button>
+          ) : (
+            <BarButton icon={Images} label="Gallery" onClick={() => (setAlbum(null), setTab("all"), scrollToTabs())} />
+          )}
+          <BarButton icon={MessageCircleHeart} label="Wishes" onClick={() => (f.wishes ? (canShoot ? start("wish") : (setAlbum(null), setTab("wishes"), scrollToTabs())) : undefined)} disabled={!f.wishes} />
+          <BarButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
         </div>
-      ) : null}
+      </nav>
+
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+        <div className="grid gap-2">
+          <MoreItem
+            icon={Sparkles}
+            label="Share my story card"
+            onClick={() => {
+              setMoreOpen(false);
+              shareCard();
+            }}
+          />
+          <MoreItem icon={PartyPopper} label="Event recap" href={`/e/${p.slug}/recap`} />
+          <MoreItem
+            icon={User}
+            label="My photos"
+            onClick={() => {
+              setMoreOpen(false);
+              if (joined) myPhotos();
+              else setJoinFor({ kind: "join" });
+            }}
+          />
+          {f.albumDownload ? <MoreItem icon={Download} label="Download the whole album" href={`/api/e/${p.slug}/album`} /> : null}
+          <MoreItem
+            icon={Share2}
+            label="Share this album"
+            onClick={() => {
+              setMoreOpen(false);
+              if (navigator.share) navigator.share({ title: p.event.name, url: location.href }).catch(() => {});
+              else navigator.clipboard?.writeText(location.href).then(() => flash("Link copied ✨"));
+            }}
+          />
+        </div>
+      </Sheet>
 
       <input
         ref={pick}
@@ -543,7 +571,7 @@ export function GuestApp(p: Props) {
       />
 
       {toast ? (
-        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4" role="status">
+        <div className="fixed inset-x-0 bottom-28 z-40 flex justify-center px-4" role="status">
           <div className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lift [animation:pc-pop_3.5s_ease_forwards]">{toast}</div>
         </div>
       ) : null}
@@ -551,7 +579,8 @@ export function GuestApp(p: Props) {
       {cameraOpen ? (
         <DisposableCamera
           onClose={() => setCameraOpen(false)}
-          onShot={(file) => up.add([file], { mission, prepared: true })}
+          onShot={(file, tags) => up.add([file], { mission, prepared: true, tags })}
+          suggestedTags={f.tags ? p.suggestedTags : null}
           onFallback={() => {
             history.back();
             setPickMissionId(mission);
@@ -590,6 +619,7 @@ export function GuestApp(p: Props) {
           mission={pickMissionId}
           onMission={setPickMissionId}
           left={shotsLeft}
+          tags={f.tags ? { suggested: p.suggestedTags, value: pickTags, onChange: setPickTags } : null}
         />
       </Sheet>
 
@@ -626,6 +656,10 @@ export function GuestApp(p: Props) {
           voting={f.voting}
           onVote={vote}
           missions={missionMap}
+          onTag={(t) => {
+            history.back();
+            setTimeout(() => openTag(t), 0);
+          }}
           onFolder={(g, name) => {
             history.back();
             setTimeout(() => {
@@ -680,16 +714,23 @@ function JoinForm({
   );
 }
 
-function QuickAction({ icon: Icon, label, onClick, href }: { icon: typeof Camera; label: string; onClick?: () => void; href?: string }) {
+function BarButton({ icon: Icon, label, onClick, disabled }: { icon: typeof Camera; label: string; onClick?: () => void; disabled?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className="grid justify-items-center gap-1 py-1.5 text-[11px] font-semibold text-ink/80 disabled:opacity-35">
+      <Icon className="size-6" aria-hidden />
+      {label}
+    </button>
+  );
+}
+
+function MoreItem({ icon: Icon, label, onClick, href }: { icon: typeof Camera; label: string; onClick?: () => void; href?: string }) {
+  const cls = "flex items-center gap-3 rounded-2xl bg-background px-4 py-3.5 text-left font-semibold";
   const inner = (
     <>
-      <span className="grid size-11 place-items-center rounded-2xl border border-white/15">
-        <Icon className="size-5" aria-hidden />
-      </span>
+      <Icon className="size-5 text-brand" aria-hidden />
       {label}
     </>
   );
-  const cls = "grid justify-items-center gap-1.5 rounded-2xl py-2 text-xs font-semibold hover:bg-white/10";
   return href ? (
     <a href={href} className={cls}>
       {inner}

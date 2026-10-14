@@ -292,7 +292,9 @@ export function UploadReview({
   mission,
   onMission,
   left,
+  tags,
 }: {
+  tags?: { suggested: string[]; value: string[]; onChange: (t: string[]) => void } | null;
   files: { key: string; url: string }[];
   onRemove: (key: string) => void;
   onAdd: () => void;
@@ -333,6 +335,12 @@ export function UploadReview({
               </button>
             ))}
           </div>
+        </div>
+      ) : null}
+      {tags ? (
+        <div>
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Add hashtags (optional) — they become albums in Highlights</div>
+          <TagPicker suggested={tags.suggested} value={tags.value} onChange={tags.onChange} />
         </div>
       ) : null}
       {over ? <p className="rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">You have {left} shot{left === 1 ? "" : "s"} left, so only the first {left} will be shared.</p> : null}
@@ -399,6 +407,52 @@ export function WishForm({ slug, myPhotos, onDone }: { slug: string; myPhotos: G
       <button type="button" onClick={send} disabled={busy || message.trim().length < 2} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-50">
         {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Send className="size-5" aria-hidden />} Send wish
       </button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ hashtags
+
+/** One-tap hashtag chips (+ type your own). `dark` for the camera. */
+export function TagPicker({ suggested, value, onChange, dark }: { suggested: string[]; value: string[]; onChange: (tags: string[]) => void; dark?: boolean }) {
+  const [draft, setDraft] = useState("");
+  const all = [...new Set([...suggested, ...value])];
+  const toggle = (t: string) => onChange(value.includes(t) ? value.filter((x) => x !== t) : value.length >= 5 ? value : [...value, t]);
+  const add = () => {
+    const t = draft.trim().replace(/^#+/, "").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 24);
+    if (t.length >= 2 && !value.includes(t) && value.length < 5) onChange([...value, t]);
+    setDraft("");
+  };
+  return (
+    <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1" aria-label="Hashtags">
+      {all.map((t) => {
+        const on = value.includes(t);
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => toggle(t)}
+            aria-pressed={on}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${on ? "bg-brand text-white" : dark ? "bg-white/12 text-white/85" : "bg-muted text-ink/80"}`}
+          >
+            #{t}
+          </button>
+        );
+      })}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " " || e.key === ",") {
+            e.preventDefault();
+            add();
+          }
+        }}
+        onBlur={add}
+        placeholder="+ your own"
+        aria-label="Add your own hashtag"
+        className={`w-28 shrink-0 rounded-full px-3 py-1.5 text-xs outline-none ${dark ? "bg-white/10 text-white placeholder:text-white/50" : "bg-muted placeholder:text-muted-foreground"}`}
+      />
     </div>
   );
 }
