@@ -27,6 +27,14 @@ export const driver = (process.env.STORAGE_DRIVER ?? (process.env.R2_BUCKET ? "r
 const BUCKET = process.env.R2_BUCKET ?? "";
 export const LOCAL_ROOT = resolve(process.env.LOCAL_STORAGE_DIR ?? ".local-storage");
 
+// Production must use R2: the web app and the worker run from different
+// folders, so local storage there would silently lose uploads.
+function assertUsable() {
+  if (driver === "local" && process.env.NODE_ENV === "production" && process.env.ALLOW_LOCAL_STORAGE !== "1") {
+    throw new Error("Photo storage is not configured (R2_BUCKET missing)");
+  }
+}
+
 declare global {
   var __pixcherryS3: S3Client | undefined;
 }
@@ -58,6 +66,7 @@ export function localPutSignature(key: string, type: string, len: number, exp: n
 
 /** URL the browser PUTs the file to. Size and type are part of the signature. */
 export async function presignPut(key: string, contentType: string, contentLength: number, expiresIn = 900) {
+  assertUsable();
   if (driver === "local") {
     const exp = Math.floor(Date.now() / 1000) + expiresIn;
     const sig = localPutSignature(key, contentType, contentLength, exp);
@@ -68,6 +77,7 @@ export async function presignPut(key: string, contentType: string, contentLength
 }
 
 export async function putObject(key: string, body: Buffer, contentType: string, cacheControl = "public, max-age=604800, immutable") {
+  assertUsable();
   if (driver === "local") {
     const p = localPath(key);
     await mkdir(dirname(p), { recursive: true });

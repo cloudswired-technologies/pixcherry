@@ -7,6 +7,10 @@ const CACHE = "public, max-age=604800, immutable";
 
 export function createStorage() {
   const driver = process.env.STORAGE_DRIVER ?? (process.env.R2_BUCKET ? "r2" : "local");
+  if (driver === "local" && process.env.NODE_ENV === "production" && process.env.ALLOW_LOCAL_STORAGE !== "1") {
+    // Wait for R2 settings instead of reading/writing the wrong folder (systemd restarts us).
+    throw new Error("Photo storage is not configured (R2_BUCKET missing)");
+  }
   if (driver === "local") {
     const root = resolve(process.env.LOCAL_STORAGE_DIR ?? ".local-storage");
     const p = (key) => {

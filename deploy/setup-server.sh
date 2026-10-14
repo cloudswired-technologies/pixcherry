@@ -7,6 +7,13 @@
 set -u
 APP=/home/pixcherry/app
 
+# Swap: the 1-2 GB plans need a cushion for image bursts.
+if ! swapon --show | grep -q .; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  sysctl -q vm.swappiness=10 && echo 'vm.swappiness=10' > /etc/sysctl.d/99-pixcherry.conf
+fi
+
 id pixcherry >/dev/null 2>&1 || useradd -m -s /bin/bash pixcherry
 mkdir -p $APP/releases /home/pixcherry/worker /var/log/caddy /var/backups/pixcherry /etc/caddy/certs
 chown -R pixcherry:pixcherry $APP /home/pixcherry/worker

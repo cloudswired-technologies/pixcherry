@@ -19,7 +19,9 @@ if (existsSync(".env.local")) {
 
 const CONCURRENCY = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2));
 const MAX_ATTEMPTS = 3;
-const MAX_PIXELS = 120_000_000; // ~ 13000 x 9000; larger is refused
+// Larger images are refused. Decoding needs ~3 bytes per pixel, so keep this
+// in line with the server RAM (50 MP ≈ 150 MB; phones shoot 12–48 MP).
+const MAX_PIXELS = Number(process.env.WORKER_MAX_PIXELS ?? 50_000_000);
 const DEFAULT_QUALITY = { name: "Standard", max_px: 2048, jpeg_quality: 80 };
 
 sharp.cache(false);

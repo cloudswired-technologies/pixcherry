@@ -17,7 +17,8 @@ Restart=always
 RestartSec=3
 # Lower priority than the web process: uploads and pages stay fast during bursts.
 Nice=10
-MemoryMax=700M
+Environment=WORKER_MAX_PIXELS=50000000
+MemoryMax=480M
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
