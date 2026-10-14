@@ -1,0 +1,28 @@
+[Unit]
+Description=EventSnap image worker (sharp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eventsnap
+Group=eventsnap
+WorkingDirectory=/home/eventsnap/worker
+EnvironmentFile=/home/eventsnap/app/.env
+Environment=NODE_ENV=production
+# One photo per vCPU. Raise with the server size (and WORKER_CONCURRENCY in .env wins).
+Environment=WORKER_CONCURRENCY=2
+ExecStart=/usr/bin/node worker.mjs
+Restart=always
+RestartSec=3
+# Lower priority than the web process: uploads and pages stay fast during bursts.
+Nice=10
+MemoryMax=700M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/eventsnap/worker
+
+[Install]
+WantedBy=multi-user.target

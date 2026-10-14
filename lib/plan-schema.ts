@@ -1,0 +1,65 @@
+// Every package setting lives here. The admin plan form, the event override
+// form, the pricing cards and the limit checks all read this list, so adding a
+// setting = adding one entry (plus the code that enforces it).
+
+export type LimitKey =
+  | "photos_per_guest"
+  | "max_photos"
+  | "max_guests"
+  | "max_file_mb"
+  | "retention_days"
+  | "upload_hours_after_event";
+
+export type FeatureKey = "guest_album_download" | "custom_branding" | "hide_powered_by" | "moderation" | "slideshow";
+
+export const LIMITS: { key: LimitKey; label: string; help: string; min: number; max: number; fallback: number; unit: string; pricing?: (n: number) => string }[] = [
+  { key: "photos_per_guest", label: "Photos per guest", help: "How many photos one guest (one phone) can upload.", min: 1, max: 10000, fallback: 20, unit: "photos", pricing: (n) => `${n.toLocaleString("en-MY")} photos per guest` },
+  { key: "max_photos", label: "Photos per event", help: "Total photos the whole event can hold.", min: 10, max: 1000000, fallback: 2000, unit: "photos", pricing: (n) => `Up to ${n.toLocaleString("en-MY")} photos` },
+  { key: "max_guests", label: "Guests per event", help: "How many phones can join and upload.", min: 1, max: 100000, fallback: 200, unit: "guests", pricing: (n) => `Up to ${n.toLocaleString("en-MY")} guests` },
+  { key: "max_file_mb", label: "Max file size", help: "Largest single photo accepted (after the phone resizes it).", min: 1, max: 100, fallback: 15, unit: "MB" },
+  { key: "retention_days", label: "Storage after the event", help: "Days the photos stay online after the event ends. Then they are deleted.", min: 1, max: 3650, fallback: 7, unit: "days", pricing: (n) => `Photos kept ${n} days after the event` },
+  { key: "upload_hours_after_event", label: "Uploads stay open after the event", help: "Hours after the event ends that guests can still upload.", min: 0, max: 8760, fallback: 48, unit: "hours" },
+];
+
+export const FEATURES: { key: FeatureKey; label: string; help: string; pricing: string }[] = [
+  { key: "guest_album_download", label: "Guests can download the whole album", help: "Otherwise only the organiser can download the ZIP. Guests can always save single photos.", pricing: "Guests can download the full album" },
+  { key: "custom_branding", label: "Custom branding", help: "Organiser can set an accent colour and logo on the guest page.", pricing: "Your colours and logo" },
+  { key: "hide_powered_by", label: "Hide \"Powered by EventSnap\"", help: "Removes the EventSnap footer from the guest page.", pricing: "No EventSnap branding" },
+  { key: "moderation", label: "Photo approval", help: "Organiser can choose to approve photos before guests see them.", pricing: "Approve photos before they show" },
+  { key: "slideshow", label: "Live slideshow", help: "Full-screen slideshow page for a projector or TV.", pricing: "Live slideshow for the big screen" },
+];
+
+export type Limits = Record<LimitKey, number>;
+export type Features = Record<FeatureKey, boolean>;
+
+export const ADDON_KINDS: { kind: "retention_days" | "photos_per_guest" | "max_photos" | "max_guests"; label: string }[] = [
+  { kind: "retention_days", label: "Extra storage days" },
+  { kind: "photos_per_guest", label: "Extra photos per guest" },
+  { kind: "max_photos", label: "Extra photos per event" },
+  { kind: "max_guests", label: "Extra guests" },
+];
+
+export type AddonKind = (typeof ADDON_KINDS)[number]["kind"];
+
+export function normaliseLimits(raw: unknown): Limits {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out = {} as Limits;
+  for (const l of LIMITS) {
+    const n = Number(o[l.key]);
+    out[l.key] = Number.isFinite(n) ? Math.min(l.max, Math.max(l.min, Math.round(n))) : l.fallback;
+  }
+  return out;
+}
+
+export function normaliseFeatures(raw: unknown): Features {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out = {} as Features;
+  for (const f of FEATURES) out[f.key] = o[f.key] === true;
+  return out;
+}
+
+export type QualityPreset = { name: string; max_px: number | null; jpeg_quality: number };
+
+export function qualityLabel(q: QualityPreset) {
+  return q.max_px ? `Photos up to ${q.max_px.toLocaleString("en-MY")} px` : "Original-quality photos";
+}

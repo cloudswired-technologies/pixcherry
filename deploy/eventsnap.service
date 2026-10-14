@@ -1,0 +1,28 @@
+[Unit]
+Description=EventSnap web (Next.js standalone server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eventsnap
+Group=eventsnap
+WorkingDirectory=/home/eventsnap/app/current
+EnvironmentFile=/home/eventsnap/app/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Not 127.0.0.1 (Next turns it into "localhost" and proxy rewrites break).
+# Port 3000 stays private: the firewall only lets Cloudflare reach 80/443.
+Environment=HOSTNAME=0.0.0.0
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+MemoryMax=800M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/eventsnap/app
+
+[Install]
+WantedBy=multi-user.target
