@@ -13,6 +13,25 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Self-contained server bundle for the VPS (node .next/standalone/server.js).
   output: "standalone",
+  // lib/storage.ts has a dynamic local-storage path, so the tracer pulls in the
+  // whole project folder. Never ship local data, credentials notes or test files.
+  outputFileTracingExcludes: {
+    "/*": [
+      "./*.txt",
+      "./*.log",
+      "./.env*",
+      "./.local-db/**/*",
+      "./.local-storage/**/*",
+      "./docs/**/*",
+      "./e2e/**/*",
+      "./test-results/**/*",
+      "./playwright-report/**/*",
+      "./supabase/**/*",
+      "./scripts/**/*",
+      "./deploy/**/*",
+      "./worker/**/*",
+    ],
+  },
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

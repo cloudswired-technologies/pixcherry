@@ -6,7 +6,7 @@
 //                /home/pixcherry/worker (image worker, own node_modules)
 // Run migrations first when there are new ones: node scripts/db.mjs migrate (with the production DATABASE_URL).
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -41,7 +41,22 @@ cpSync("deploy", join(stage, "deploy"), { recursive: true });
 mkdirSync(join(stage, "worker"), { recursive: true });
 for (const f of ["worker.mjs", "storage.mjs", "package.json", "package-lock.json"]) cpSync(join("worker", f), join(stage, "worker", f));
 // Never ship local secrets or dev data.
-for (const f of [".env", ".env.local", ".env.production", ".local-db", ".local-storage"]) rmSync(join(stage, f), { recursive: true, force: true });
+for (const f of [".env", ".env.local", ".env.production", ".local-db", ".local-storage", "docs", "e2e", "test-results"]) rmSync(join(stage, f), { recursive: true, force: true });
+// Last line of defence: refuse to ship anything that looks like credentials or local data
+// (dev_details.txt once slipped into a release through Next's file tracing).
+const forbidden = [];
+(function scan(dir, rel = "") {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (e.name === "node_modules") continue;
+    if (e.isDirectory()) scan(join(dir, e.name), r);
+    else if (/\.(txt|log|pem|key)$|^\.env|dev_details|\.local-db|\.local-storage/i.test(r)) forbidden.push(r);
+  }
+})(stage);
+if (forbidden.length) {
+  rmSync(stage, { recursive: true, force: true });
+  throw new Error(`Refusing to deploy, sensitive-looking files in the bundle:\n  ${forbidden.join("\n  ")}`);
+}
 
 const release = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
 const tarball = join(tmpdir(), `pixcherry-${release}.tar.gz`);
