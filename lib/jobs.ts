@@ -48,6 +48,10 @@ export async function purgeExpiredEvents() {
   for (const r of rows) {
     objects += await deletePrefix(`ev/${r.id}/`);
     await q("update photos set status = 'deleted' where event_id = $1 and status <> 'deleted'", [r.id]);
+    // Wishes and hearts are guests' personal data: they go with the photos.
+    await q("delete from wishes where event_id = $1", [r.id]);
+    await q("delete from photo_votes v using photos p where p.id = v.photo_id and p.event_id = $1", [r.id]);
+    await q("update photos set vote_count = 0 where event_id = $1", [r.id]);
     await q("update events set purged_at = now(), photo_count = 0, slot_count = 0, bytes_used = 0, cover_key = null, logo_key = null, uploads_enabled = false where id = $1", [r.id]);
     await q("insert into audit_log (action, target, details) values ('event.purged', $1, $2)", [r.id, JSON.stringify({ photos: r.photo_count })]);
     if (r.photo_count > 0) await sendEmail({ to: r.email, template: "deleted", ...deletedEmail({ eventName: r.name }) });

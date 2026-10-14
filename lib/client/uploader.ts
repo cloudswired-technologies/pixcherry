@@ -41,15 +41,18 @@ export function useUploader(opts: {
   remaining: number;
   onUploaded: () => void;
   onNeedJoin: () => void;
+  /** Called once the queue is empty, with how many photos that batch uploaded. */
+  onIdle?: (uploaded: number) => void;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(opts.remaining);
-  const files = useRef(new Map<string, File>());
+  const files = useRef(new Map<string, { file: File; mission: string | null; prepared: boolean }>());
   const active = useRef(0);
   const queue = useRef<string[]>([]);
   const pumpRef = useRef<() => void>(() => {});
   const stopped = useRef(false);
+  const batchDone = useRef(0);
   const optsRef = useRef(opts);
   useEffect(() => {
     optsRef.current = opts;
@@ -59,12 +62,13 @@ export function useUploader(opts: {
 
   const run = useCallback(
     async (key: string) => {
-      const file = files.current.get(key)!;
+      const { file, mission, prepared } = files.current.get(key)!;
       const o = optsRef.current;
       patch(key, { status: "preparing" });
       let blob: Blob;
       try {
-        blob = await prepare(file, o.quality, o.maxBytes);
+        // Camera shots are already sized and filtered on the phone.
+        blob = prepared ? file : await prepare(file, o.quality, o.maxBytes);
       } catch {
         throw new StopError(`This photo couldn't be read. Try a different one.`);
       }
@@ -72,7 +76,7 @@ export function useUploader(opts: {
       const res = await fetch(`/api/e/${o.slug}/uploads`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ files: [{ type, size: blob.size }] }),
+        body: JSON.stringify({ files: [{ type, size: blob.size, mission }] }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string; uploads?: { id: string; url: string }[]; remaining?: number };
       if (res.status === 401 && body.code === "join") throw new StopError("Please join first.", true, true);
@@ -104,6 +108,7 @@ export function useUploader(opts: {
         await sleep(1500);
       }
       patch(key, { status: "done", progress: 1 });
+      batchDone.current++;
       o.onUploaded();
     },
     [patch],
@@ -129,6 +134,11 @@ export function useUploader(opts: {
         .finally(() => {
           active.current--;
           pumpRef.current();
+          if (active.current === 0 && !queue.current.length) {
+            const n = batchDone.current;
+            batchDone.current = 0;
+            optsRef.current.onIdle?.(n);
+          }
         });
     }
   }, [patch, run]);
@@ -137,7 +147,7 @@ export function useUploader(opts: {
   }, [pump]);
 
   const add = useCallback(
-    (picked: FileList | File[]) => {
+    (picked: FileList | File[], opts: { mission?: string | null; prepared?: boolean } = {}) => {
       stopped.current = false;
       setNotice(null);
       const all = Array.from(picked).filter(looksLikeImage);
@@ -151,7 +161,7 @@ export function useUploader(opts: {
       if (msgs.length) setNotice(msgs.join(" "));
       const added: Item[] = take.map((f) => {
         const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        files.current.set(key, f);
+        files.current.set(key, { file: f, mission: opts.mission ?? null, prepared: !!opts.prepared });
         return { key, name: f.name, preview: URL.createObjectURL(f), status: "queued", progress: 0 };
       });
       setItems((l) => [...added, ...l]);
@@ -162,6 +172,8 @@ export function useUploader(opts: {
   );
 
   const busy = items.some((i) => i.status === "queued" || i.status === "preparing" || i.status === "uploading");
+  // Shots still available once the queued ones are counted (the camera's film counter).
+  const available = Math.max(0, remaining - items.filter((i) => i.status === "queued" || i.status === "preparing").length);
 
   // Keep the screen awake and warn before leaving while uploads run.
   useEffect(() => {
@@ -184,5 +196,5 @@ export function useUploader(opts: {
     });
   }, []);
 
-  return { items, add, busy, notice, remaining, clearDone };
+  return { items, add, busy, notice, remaining, available, clearDone };
 }

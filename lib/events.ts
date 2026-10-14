@@ -19,6 +19,7 @@ export type EventRow = {
   ask_guest_name: boolean;
   uploads_enabled: boolean;
   require_approval: boolean;
+  camera_only: boolean;
   plan_id: string | null;
   plan_snapshot: PlanSnapshot | null;
   addon_totals: Partial<Record<AddonKind, number>>;

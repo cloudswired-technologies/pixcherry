@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/ui";
+import { listMissions, missionsDoneBy } from "@/lib/engage";
 import { coverUrl, getEventBySlug, logoUrl } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 import { currentGuest } from "@/lib/guests";
@@ -33,8 +34,12 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
     );
   }
   const guest = await currentGuest(e.id);
-  const first = await listPhotos(e.id, { order: "new", limit: 60, guestId: guest?.id ?? null });
   const f = e.cfg.features;
+  const [first, missions, done] = await Promise.all([
+    listPhotos(e.id, { order: "new", limit: 60, viewer: guest?.id ?? null }),
+    f.missions ? listMissions(e.id) : Promise.resolve([]),
+    f.missions && guest ? missionsDoneBy(guest.id) : Promise.resolve([]),
+  ]);
   return (
     <GuestApp
       slug={e.slug}
@@ -48,13 +53,16 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
         poweredBy: !f.hide_powered_by,
         askName: e.ask_guest_name,
         review: f.moderation && e.require_approval,
+        cameraOnly: f.camera && e.camera_only,
       }}
+      features={{ camera: f.camera, wishes: f.wishes, voting: f.voting, missions: f.missions, albumDownload: f.guest_album_download }}
       canUpload={uploadsOpen(e, e.cfg)}
       guest={guest ? { name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
       limits={{ perGuest: e.cfg.limits.photos_per_guest, maxBytes: e.cfg.limits.max_file_mb * 1024 * 1024 }}
       quality={{ maxPx: e.cfg.quality.max_px, jpeg: e.cfg.quality.jpeg_quality }}
-      albumDownload={f.guest_album_download}
       initial={{ ...first, count: e.photo_count }}
+      missions={missions}
+      missionsDone={done}
       siteKey={turnstileSiteKey()}
     />
   );

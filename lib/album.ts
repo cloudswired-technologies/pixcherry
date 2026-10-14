@@ -16,11 +16,23 @@ function safe(s: string) {
 }
 
 async function* files(e: Pick<EventRow, "id">) {
+  // Wishes first, as a text file the hosts can keep.
+  const wishes: { name: string | null; message: string; created_at: Date }[] = await q(
+    "select name, message, created_at from wishes where event_id = $1 and not is_hidden order by created_at",
+    [e.id],
+  );
+  if (wishes.length) {
+    const text = wishes
+      .map((w) => `${w.name ?? "A guest"} (${new Date(w.created_at).toISOString().slice(0, 16).replace("T", " ")} UTC)\n${w.message}\n`)
+      .join("\n");
+    yield { input: new TextEncoder().encode(text), name: "wishes.txt", lastModified: new Date() };
+  }
+  // One folder per guest ("Siti-3f2a/0001.jpg"); the id suffix keeps two Sitis apart.
   let cursor: { at: Date; id: string } | null = null;
-  let n = 0;
+  const perGuest = new Map<string, number>();
   for (;;) {
-    const rows: { id: string; ready_at: Date; name: string | null }[] = await q(
-      `select p.id, p.ready_at, g.name from photos p left join guests g on g.id = p.guest_id
+    const rows: { id: string; ready_at: Date; name: string | null; guest_id: string | null }[] = await q(
+      `select p.id, p.ready_at, g.name, p.guest_id from photos p left join guests g on g.id = p.guest_id
        where p.event_id = $1 and p.status = 'ready' ${cursor ? "and (p.ready_at, p.id) > ($2, $3)" : ""}
        order by p.ready_at, p.id limit 200`,
       cursor ? [e.id, cursor.at, cursor.id] : [e.id],
@@ -29,8 +41,10 @@ async function* files(e: Pick<EventRow, "id">) {
     for (const r of rows) {
       const stream = await getObjectStream(photoKeys(e.id, r.id).full);
       if (!stream) continue;
-      n++;
-      yield { input: stream, name: `${String(n).padStart(4, "0")}-${safe(r.name ?? "guest")}-${r.id.slice(0, 6)}.jpg`, lastModified: r.ready_at };
+      const folder = r.guest_id ? `${safe(r.name ?? "Guest")}-${r.guest_id.slice(0, 4)}` : "Organiser";
+      const n = (perGuest.get(folder) ?? 0) + 1;
+      perGuest.set(folder, n);
+      yield { input: stream, name: `${folder}/${String(n).padStart(4, "0")}.jpg`, lastModified: r.ready_at };
     }
     const last = rows[rows.length - 1];
     if (cursor && last.id === cursor.id) return; // cursor did not move: never loop

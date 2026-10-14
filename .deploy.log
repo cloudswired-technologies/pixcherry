@@ -1,23 +1,23 @@
 ﻿> building for https://pixcherry.com
 ▲ Next.js 16.4.0 (Turbopack)
 - Environments: .env.local
-✓ Running next.config.ts took 212ms
+✓ Running next.config.ts took 5.3s
 - Experiments (use with caution):
   · serverActions
 
   Creating an optimized production build ...
-✓ Compiled successfully in 20.1s
+✓ Compiled successfully in 55s
   Running TypeScript ...
-  Finished TypeScript in 8.5s ...
+  Finished TypeScript in 8.4s ...
   Collecting page data using 7 workers ...
   Generating static pages using 7 workers (0/17) ...
   Generating static pages using 7 workers (4/17) 
   Generating static pages using 7 workers (8/17) 
   Generating static pages using 7 workers (12/17) 
-✓ Generating static pages using 7 workers (17/17) in 520ms
+✓ Generating static pages using 7 workers (17/17) in 617ms
 node : Turbopack build encountered 6 warnings:
 At line:1 char:350
-+ ... eventsnap"; node "C:\Users\Gini Tech\AppData\Local\Temp\claude\d--SYS ...
++ ... pixcherry"; node "C:\Users\Gini Tech\AppData\Local\Temp\claude\d--SYS ...
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (Turbopack build encountered 6 warnings::String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
@@ -270,26 +270,26 @@ Route (app)
 > packing
 > uploading
 > switching release
-
-added 48 packages in 3s
-npm notice
-npm notice New major version of npm available! 11.19.1 -> 12.2.0
-npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
-npm notice To update run: npm install -g npm@12.2.0
-npm notice
 worker: NOT running
-Oct 14 18:32:16 pixcherry-app-01 systemd[1]: Started pixcherry-worker.service - PixCherry image worker (sharp).
-Oct 14 18:32:18 pixcherry-app-01 node[6013]: file:///home/pixcherry/worker/storage.mjs:12
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     throw new Error("Photo storage is not configured (R2_BUCKET missing)");
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:           ^
-Oct 14 18:32:18 pixcherry-app-01 node[6013]: Error: Photo storage is not configured (R2_BUCKET missing)
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     at createStorage (file:///home/pixcherry/worker/storage.mjs:12:11)
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     at file:///home/pixcherry/worker/worker.mjs:35:17
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     at async node:internal/modules/esm/loader:647:26
-Oct 14 18:32:18 pixcherry-app-01 node[6013]:     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
-Oct 14 18:32:18 pixcherry-app-01 node[6013]: Node.js v24.22.0
-Oct 14 18:32:18 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Main process exited, code=exited, status=1/FAILURE
-Oct 14 18:32:18 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Failed with result 'exit-code'.
-healthy: /home/pixcherry/app/releases/20261014T183123
+Oct 14 18:32:25 pixcherry-app-01 node[6106]:     at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+Oct 14 18:32:25 pixcherry-app-01 node[6106]:     at async node:internal/modules/esm/loader:647:26
+Oct 14 18:32:25 pixcherry-app-01 node[6106]:     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Oct 14 18:32:25 pixcherry-app-01 node[6106]: Node.js v24.22.0
+Oct 14 18:32:25 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Main process exited, code=exited, status=1/FAILURE
+Oct 14 18:32:25 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Failed with result 'exit-code'.
+Oct 14 18:32:28 pixcherry-app-01 systemd[1]: Stopped pixcherry-worker.service - PixCherry image worker (sharp).
+Oct 14 19:00:57 pixcherry-app-01 systemd[1]: Started pixcherry-worker.service - PixCherry image worker (sharp).
+Oct 14 19:00:57 pixcherry-app-01 node[24202]: file:///home/pixcherry/worker/storage.mjs:13
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     throw new Error("Photo storage is not configured (R2_BUCKET missing)");
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:           ^
+Oct 14 19:00:57 pixcherry-app-01 node[24202]: Error: Photo storage is not configured (R2_BUCKET missing)
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     at createStorage (file:///home/pixcherry/worker/storage.mjs:13:11)
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     at file:///home/pixcherry/worker/worker.mjs:35:17
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     at async node:internal/modules/esm/loader:647:26
+Oct 14 19:00:57 pixcherry-app-01 node[24202]:     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Oct 14 19:00:57 pixcherry-app-01 node[24202]: Node.js v24.22.0
+Oct 14 19:00:57 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Main process exited, code=exited, status=1/FAILURE
+Oct 14 19:00:57 pixcherry-app-01 systemd[1]: pixcherry-worker.service: Failed with result 'exit-code'.
+healthy: /home/pixcherry/app/releases/20261014T190013
 > done

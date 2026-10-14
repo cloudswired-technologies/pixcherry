@@ -8,16 +8,25 @@ export const MAX_FILES_PER_REQUEST = 10;
 
 export type Reservation = { id: string; url: string; type: string; size: number };
 
+const UUID = /^[0-9a-f-]{36}$/;
+
 /**
  * Reserves upload slots for a guest and returns presigned PUT URLs. Grants as
  * many files as the guest and event quotas allow (possibly fewer than asked).
+ * A file may name a snap mission; unknown missions are dropped silently.
  */
-export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number }[]) {
+export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number; mission?: string | null }[]) {
   const maxBytes = e.cfg.limits.max_file_mb * 1024 * 1024;
   for (const f of files) {
     if (!(ACCEPTED_TYPES as readonly string[]).includes(f.type)) return { error: "Only JPEG, PNG or WebP photos can be uploaded." } as const;
     if (!Number.isInteger(f.size) || f.size < 100 || f.size > maxBytes) return { error: `Each photo must be under ${e.cfg.limits.max_file_mb} MB.` } as const;
   }
+  const asked = [...new Set(files.map((f) => f.mission).filter((m): m is string => !!m && UUID.test(m)))];
+  const valid = new Set(
+    e.cfg.features.missions && asked.length
+      ? (await q<{ id: string }>("select id from event_missions where event_id = $1 and id = any($2::uuid[])", [e.id, asked])).map((r) => r.id)
+      : [],
+  );
   const granted = await tx(async (c) => {
     const ev = await one<{ slot_count: number }>("select slot_count from events where id = $1 for update", [e.id], c);
     const g = await one<{ upload_count: number; is_blocked: boolean }>("select upload_count, is_blocked from guests where id = $1 for update", [guestId], c);
@@ -28,15 +37,15 @@ export async function reserveUploads(e: EventWithConfig, guestId: string, files:
     if (n === 0) {
       return {
         error: guestLeft <= 0
-          ? `You've reached the limit of ${e.cfg.limits.photos_per_guest} photos. Thank you for sharing!`
+          ? `That's your whole roll — ${e.cfg.limits.photos_per_guest} shots! Thank you for sharing.`
           : "This event's album is full.",
       } as const;
     }
     const rows: { id: string; type: string; size: number }[] = [];
     for (const f of files.slice(0, n)) {
       const r = await one<{ id: string }>(
-        "insert into photos (event_id, guest_id, content_type, declared_bytes) values ($1, $2, $3, $4) returning id",
-        [e.id, guestId, f.type, f.size],
+        "insert into photos (event_id, guest_id, content_type, declared_bytes, mission_id) values ($1, $2, $3, $4, $5) returning id",
+        [e.id, guestId, f.type, f.size, f.mission && valid.has(f.mission) ? f.mission : null],
         c,
       );
       rows.push({ id: r!.id, type: f.type, size: f.size });
@@ -81,14 +90,29 @@ export type GalleryPhoto = {
   w: number;
   h: number;
   by: string | null;
+  guest: string | null; // uploader's folder id
   at: string;
   status: "ready" | "review";
   mine: boolean;
+  votes: number;
+  voted: boolean;
+  mission: string | null;
 };
 
-type Row = { id: string; width: number; height: number; name: string | null; ready_at: Date; status: "ready" | "review"; guest_id: string | null };
+type Row = {
+  id: string;
+  width: number;
+  height: number;
+  name: string | null;
+  ready_at: Date;
+  status: "ready" | "review";
+  guest_id: string | null;
+  vote_count: number;
+  voted: boolean;
+  mission_id: string | null;
+};
 
-function toGallery(eventId: string, r: Row, guestId: string | null): GalleryPhoto {
+function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto {
   const k = photoKeys(eventId, r.id);
   return {
     id: r.id,
@@ -98,45 +122,68 @@ function toGallery(eventId: string, r: Row, guestId: string | null): GalleryPhot
     w: r.width,
     h: r.height,
     by: r.name,
+    guest: r.guest_id,
     at: new Date(r.ready_at).toISOString(),
     status: r.status,
-    mine: !!guestId && r.guest_id === guestId,
+    mine: !!viewer && r.guest_id === viewer,
+    votes: r.vote_count,
+    voted: r.voted,
+    mission: r.mission_id,
   };
 }
 
+export type ListOptions = {
+  order: "new" | "old" | "top";
+  cursor?: string | null;
+  limit?: number;
+  includeReview?: boolean; // organiser view
+  viewer?: string | null; // guest looking at the gallery (sees own photos waiting for approval, own hearts)
+  since?: string | null;
+  byGuest?: string | null; // folder: one uploader
+  mission?: string | null;
+};
+
 /**
- * Gallery page. order=new pages backwards in time, old forwards. `after` = cursor
- * "<iso>|<id>" of the last item seen. `includeReview`: organiser view.
+ * Gallery page. new/old page by "<iso>|<id>" cursor; top pages by offset ("o:<n>").
  */
-export async function listPhotos(
-  eventId: string,
-  opts: { order: "new" | "old"; cursor?: string | null; limit?: number; includeReview?: boolean; guestId?: string | null; since?: string | null },
-) {
+export async function listPhotos(eventId: string, opts: ListOptions) {
   const limit = Math.min(opts.limit ?? 60, 200);
   const params: unknown[] = [eventId];
+  const viewer = opts.viewer && UUID.test(opts.viewer) ? opts.viewer : null;
+  const viewerParam = viewer ? `$${params.push(viewer)}::uuid` : "null::uuid";
   let where = `p.event_id = $1 and (p.status = 'ready'${opts.includeReview ? " or p.status = 'review'" : ""}${
-    opts.guestId && !opts.includeReview ? ` or (p.status = 'review' and p.guest_id = $${params.push(opts.guestId)})` : ""
+    viewer && !opts.includeReview ? ` or (p.status = 'review' and p.guest_id = ${viewerParam})` : ""
   })`;
-  const cur = opts.cursor?.split("|");
-  if (cur && cur.length === 2 && !Number.isNaN(Date.parse(cur[0])) && /^[0-9a-f-]{36}$/.test(cur[1])) {
-    const op = opts.order === "new" ? "<" : ">";
-    where += ` and (p.ready_at, p.id) ${op} ($${params.push(cur[0])}::timestamptz, $${params.push(cur[1])}::uuid)`;
+  if (opts.byGuest && UUID.test(opts.byGuest)) where += ` and p.guest_id = $${params.push(opts.byGuest)}::uuid`;
+  if (opts.mission && UUID.test(opts.mission)) where += ` and p.mission_id = $${params.push(opts.mission)}::uuid`;
+  let order: string;
+  let offset = 0;
+  if (opts.order === "top") {
+    order = "p.vote_count desc, p.ready_at desc, p.id desc";
+    const m = opts.cursor?.match(/^o:(\d{1,6})$/);
+    offset = m ? Number(m[1]) : 0;
+  } else {
+    const cur = opts.cursor?.split("|");
+    if (cur && cur.length === 2 && !Number.isNaN(Date.parse(cur[0])) && UUID.test(cur[1])) {
+      const op = opts.order === "new" ? "<" : ">";
+      where += ` and (p.ready_at, p.id) ${op} ($${params.push(cur[0])}::timestamptz, $${params.push(cur[1])}::uuid)`;
+    }
+    const dir = opts.order === "new" ? "desc" : "asc";
+    order = `p.ready_at ${dir}, p.id ${dir}`;
   }
   if (opts.since && !Number.isNaN(Date.parse(opts.since))) where += ` and p.ready_at > $${params.push(opts.since)}::timestamptz`;
-  const dir = opts.order === "new" ? "desc" : "asc";
   const rows = await q<Row>(
-    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id
+    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id,
+       exists (select 1 from photo_votes v where v.photo_id = p.id and v.guest_id = ${viewerParam}) as voted
      from photos p left join guests g on g.id = p.guest_id
-     where ${where} order by p.ready_at ${dir}, p.id ${dir} limit ${limit + 1}`,
+     where ${where} order by ${order} limit ${limit + 1} offset ${offset}`,
     params,
   );
   const more = rows.length > limit;
   const page = rows.slice(0, limit);
   const last = page.at(-1);
-  return {
-    photos: page.map((r) => toGallery(eventId, r, opts.guestId ?? null)),
-    next: more && last ? `${new Date(last.ready_at).toISOString()}|${last.id}` : null,
-  };
+  const next = !more || !last ? null : opts.order === "top" ? `o:${offset + limit}` : `${new Date(last.ready_at).toISOString()}|${last.id}`;
+  return { photos: page.map((r) => toGallery(eventId, r, viewer)), next };
 }
 
 /** Organiser removes a photo: storage goes now, counters follow. */

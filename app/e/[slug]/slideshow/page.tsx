@@ -11,5 +11,5 @@ export default async function SlideshowPage({ params }: { params: Promise<{ slug
   const e = await getEventBySlug((await params).slug);
   if (!e || !e.paid_at || e.purged_at || !e.cfg.features.slideshow) notFound();
   const qr = await QRCode.toString(guestUrl(APP_URL, e.slug), { type: "svg", margin: 1, color: { dark: "#1c1917", light: "#ffffff" } });
-  return <Slideshow slug={e.slug} name={e.name} qrSvg={qr} />;
+  return <Slideshow slug={e.slug} name={e.name} qrSvg={qr} voting={e.cfg.features.voting} wishes={e.cfg.features.wishes} />;
 }

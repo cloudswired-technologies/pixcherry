@@ -49,8 +49,9 @@ test("API rejects bad uploads and frees quota", async ({ browser, request }) => 
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto(`/e/${ev.slug}`);
-  await page.getByRole("button", { name: "Start sharing photos" }).click();
-  await expect(page.getByText("You can add 3 more photos.")).toBeVisible();
+  await page.getByRole("button", { name: "Upload" }).click();
+  await page.getByRole("button", { name: /Let's go/ }).click();
+  await expect(page.getByText(/You have\s*3\s*shots left/)).toBeVisible();
   const api = page.request;
 
   // Wrong type and oversize
@@ -85,8 +86,9 @@ test("API rejects bad uploads and frees quota", async ({ browser, request }) => 
   const other = await browser.newContext();
   const otherPage = await other.newPage();
   await otherPage.goto(`/e/${ev.slug}`);
-  await otherPage.getByRole("button", { name: "Start sharing photos" }).click();
-  await expect(otherPage.getByText("You can add 3 more photos.")).toBeVisible();
+  await otherPage.getByRole("button", { name: "Upload" }).click();
+  await otherPage.getByRole("button", { name: /Let's go/ }).click();
+  await expect(otherPage.getByText(/You have\s*3\s*shots left/)).toBeVisible();
   expect((await otherPage.request.post(`/api/e/${ev.slug}/uploads/${r2.body.uploads[0].id}`)).status()).toBe(409);
 
   // Cron without the secret is refused

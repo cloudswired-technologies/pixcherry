@@ -10,6 +10,7 @@ export function EventTabs({ id, review }: { id: string; review: number }) {
   const tabs = [
     { href: base, label: "Overview" },
     { href: `${base}/photos`, label: review ? `Photos (${review} to approve)` : "Photos" },
+    { href: `${base}/engage`, label: "Missions & wishes" },
     { href: `${base}/settings`, label: "Settings" },
     { href: `${base}/checkout`, label: "Package" },
   ];

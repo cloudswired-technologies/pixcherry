@@ -92,12 +92,14 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   // --- guest joins on a phone and uploads 3 photos + 1 broken file
   const guest = await guestPage(browser, guestUrl);
   await expect(guest.getByRole("heading", { name: "Aina & Hakim E2E" })).toBeVisible();
+  await guest.getByRole("button", { name: "Upload" }).click();
+  await expect(guest.getByRole("dialog", { name: "Join the album" })).toBeVisible();
   await guest.getByLabel("Your name").fill("Siti");
-  await guest.getByRole("button", { name: "Start sharing photos" }).click();
-  await expect(guest.getByText("You can add 20 more photos.")).toBeVisible();
-  await guest.locator('input[type=file][multiple]').setInputFiles([...files, bad]);
-  await expect(guest.getByText("3 uploaded, 1 failed")).toBeVisible({ timeout: 90_000 });
-  await expect(guest.getByText("You can add 17 more photos.")).toBeVisible();
+  await guest.getByRole("button", { name: /Let's go/ }).click();
+  await expect(guest.getByText(/You have\s*20\s*shots left/)).toBeVisible();
+  await guest.locator("input[type=file][multiple]").setInputFiles([...files, bad]);
+  await expect(guest.getByText("3 shared")).toBeVisible({ timeout: 90_000 });
+  await expect(guest.getByText(/You have\s*17\s*shots left/)).toBeVisible();
 
   // worker processes them; gallery picks them up by polling
   await expect(guest.getByAltText("Photo by Siti")).toHaveCount(3, { timeout: 60_000 });
@@ -123,6 +125,7 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   const zipBody = await zip.body();
   expect(zipBody.subarray(0, 2).toString()).toBe("PK");
   expect(zipBody.toString("latin1").split("PK\x01\x02").length - 1).toBe(3);
+  expect(zipBody.toString("latin1")).toMatch(/Siti-[0-9a-f]{4}\/0001\.jpg/); // one folder per guest
 
   // --- organiser deletes one photo
   await page.goto(`/dashboard/events/${ev.id}/photos`);
@@ -141,10 +144,10 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await admin.getByRole("button", { name: "Save overrides" }).click();
   await expect(admin.getByText("Overrides saved")).toBeVisible();
   await guest.reload();
-  await expect(guest.getByText("You can add 1 more photo.")).toBeVisible();
-  await guest.locator('input[type=file][multiple]').setInputFiles(files.slice(0, 2));
+  await expect(guest.getByText(/You have\s*1\s*shot left/)).toBeVisible();
+  await guest.locator("input[type=file][multiple]").setInputFiles(files.slice(0, 2));
   await expect(guest.getByText(/Only 1 more photo\(s\) allowed/)).toBeVisible();
-  await expect(guest.getByText("1 uploaded")).toBeVisible({ timeout: 60_000 });
+  await expect(guest.getByText("1 shared")).toBeVisible({ timeout: 60_000 });
 
   // admin pages render
   for (const p of ["/admin", "/admin/events", "/admin/plans", "/admin/quality", "/admin/addons", "/admin/promos", "/admin/settings", "/admin/logs"]) {

@@ -9,5 +9,12 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   workers: 1,
   reporter: "list",
-  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000", channel: "msedge", trace: "retain-on-failure" },
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    channel: "msedge",
+    trace: "retain-on-failure",
+    // A fake webcam (test pattern) so the in-app camera can be tested.
+    launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+    permissions: ["camera"],
+  },
 });

@@ -59,19 +59,75 @@ test("screens", async ({ browser }) => {
   await expect(d.getByText("Event activated")).toBeVisible();
   const [ev] = await sql("select slug from events where id = $1", [id]);
 
-  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await d.goto(`/dashboard/events/${id}/engage`);
+  await d.getByRole("button", { name: "Add the wedding pack" }).click();
+  await expect(d.getByText("Selfie with the couple")).toBeVisible();
+  await d.screenshot({ path: `${OUT}/organiser-engage.png`, fullPage: true });
+
+  const imagesLoaded = (p: typeof d) => p.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15_000 }).catch(() => {});
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, permissions: ["camera"] });
   const g = await phone.newPage();
   await g.goto(`/e/${ev.slug}`);
-  await g.screenshot({ path: `${OUT}/guest-join.png` });
+  await g.screenshot({ path: `${OUT}/guest-first-visit.png` });
+  await g.getByRole("button", { name: "Upload" }).click();
   await g.getByLabel("Your name").fill("Siti");
-  await g.getByRole("button", { name: "Start sharing photos" }).click();
+  await g.screenshot({ path: `${OUT}/guest-join.png` });
+  await g.getByRole("button", { name: /Let's go/ }).click();
+  await expect(g.getByText(/You have\s*\d+\s*shots left/)).toBeVisible();
   await g.locator("input[type=file][multiple]").setInputFiles(files);
-  await expect(g.getByText(`${files.length} uploaded`)).toBeVisible({ timeout: 60_000 });
+  await expect(g.getByText(`${files.length} shared`)).toBeVisible({ timeout: 60_000 });
+  await g.screenshot({ path: `${OUT}/guest-celebrate.png` });
   await expect(g.getByAltText("Photo by Siti")).toHaveCount(files.length, { timeout: 60_000 });
+
+  // A second guest via the camera on a mission, with hearts and a wish.
+  const phone2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, permissions: ["camera"] });
+  const g2 = await phone2.newPage();
+  await g2.goto(`/e/${ev.slug}`);
+  await g2.getByRole("button", { name: /Selfie with the couple/ }).first().click();
+  await g2.getByLabel("Your name").fill("Amir");
+  await g2.getByRole("button", { name: /Let's go/ }).click();
+  const cam = g2.getByRole("dialog", { name: "Camera" });
+  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
+  await cam.getByRole("button", { name: "Golden" }).click();
+  await g2.waitForTimeout(600);
+  await g2.screenshot({ path: `${OUT}/camera.png` });
+  await cam.getByRole("button", { name: "Take photo" }).click();
+  await expect(cam.getByAltText("Last shot")).toBeVisible();
+  await cam.getByRole("button", { name: "Close camera" }).click();
+  await g2.getByRole("button", { name: "Write a wish" }).click();
+  await g2.getByRole("textbox").fill("Selamat pengantin baru Aina & Hakim! Semoga bahagia hingga ke Jannah 🤍");
+  await g2.getByRole("button", { name: "Send wish" }).click();
+  await expect(g2.getByText("— Amir")).toBeVisible();
+  await g2.getByRole("button", { name: "Gallery" }).click();
+  await expect(g2.getByAltText("Photo by Siti")).toHaveCount(files.length, { timeout: 30_000 });
+  for (const i of [0, 1, 2]) {
+    await g2.getByAltText("Photo by Siti").nth(i).click();
+    await g2.getByRole("button", { name: "Heart this photo" }).click();
+    await g2.getByRole("button", { name: "Close" }).click();
+  }
+
+  await g.reload();
+  await expect(g.getByText("1/8")).toHaveCount(0); // Siti did no missions
+  await imagesLoaded(g);
+  await g.screenshot({ path: `${OUT}/guest-home.png` });
   await g.screenshot({ path: `${OUT}/guest-gallery.png`, fullPage: true });
+  await g.getByRole("button", { name: "People" }).click();
+  await imagesLoaded(g);
+  await g.waitForTimeout(500);
+  await g.screenshot({ path: `${OUT}/guest-people.png`, fullPage: true });
+  await g.getByRole("button", { name: "Top", exact: true }).click();
+  await imagesLoaded(g);
+  await g.waitForTimeout(800);
+  await g.screenshot({ path: `${OUT}/guest-top.png`, fullPage: true });
+  await g.getByRole("button", { name: /^Wishes/ }).click();
+  await g.waitForTimeout(800);
+  await g.screenshot({ path: `${OUT}/guest-wishes.png`, fullPage: true });
+  await g.getByRole("button", { name: "Gallery" }).click();
   await g.getByAltText("Photo by Siti").nth(1).click();
   await g.waitForTimeout(800);
   await g.screenshot({ path: `${OUT}/guest-viewer.png` });
+  await g.getByRole("button", { name: "Close" }).click();
+  await phone2.close();
 
   await d.goto(`/dashboard/events/${id}`);
   await d.screenshot({ path: `${OUT}/event-overview.png`, fullPage: true });

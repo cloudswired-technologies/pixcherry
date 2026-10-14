@@ -45,6 +45,13 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
             defaultChecked={e.require_approval}
             disabled={!f.moderation}
           />
+          <Toggle
+            name="camera_only"
+            label="Disposable camera only"
+            help={f.camera ? "Guests can only snap with the PixCherry camera (film filters, shots-left counter) — no uploads from the phone gallery." : "Available on a higher package."}
+            defaultChecked={e.camera_only}
+            disabled={!f.camera}
+          />
           {f.custom_branding ? (
             <Field label="Accent colour" htmlFor="accent_color" help="Used for buttons on the guest page.">
               <Input id="accent_color" name="accent_color" type="color" defaultValue={e.accent_color ?? "#e8553d"} className="h-11 w-24 p-1" />

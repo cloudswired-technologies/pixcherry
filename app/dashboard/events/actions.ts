@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { one, q, tx } from "@/lib/db";
 import { getManagedEvent, refreshDeletion, uniqueSlug } from "@/lib/events";
 import { parseLocalDateTime } from "@/lib/format";
+import { MISSION_PRESETS, setWishHidden } from "@/lib/engage";
 import { approvePhotos, deletePhoto } from "@/lib/photos";
 import { PaymentError, startPurchase, type PurchaseKind } from "@/lib/payments";
 import { rateLimit } from "@/lib/rate-limit";
@@ -61,7 +62,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
   await tx(async (c) => {
     await q(
       `update events set name = $2, description = $3, starts_at = $4, ends_at = $5, ask_guest_name = $6, uploads_enabled = $7,
-         require_approval = $8, accent_color = $9, updated_at = now() where id = $1`,
+         require_approval = $8, accent_color = $9, camera_only = $10, updated_at = now() where id = $1`,
       [
         e.id,
         d.name,
@@ -72,6 +73,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         fd.get("uploads_enabled") === "on",
         e.cfg.features.moderation && fd.get("require_approval") === "on",
         branding && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null,
+        e.cfg.features.camera && fd.get("camera_only") === "on",
       ],
       c,
     );
@@ -193,4 +195,63 @@ export async function checkout(id: string, _: FormState, fd: FormData): Promise<
     return { error: "We couldn't start the payment. Please try again." };
   }
   redirect(url);
+}
+
+// ------------------------------------------------------------------ missions + wishes
+
+function cleanEmoji(raw: FormDataEntryValue | null) {
+  const s = String(raw ?? "").trim();
+  return s && s.length <= 16 && !/[<>]/.test(s) ? s : null;
+}
+
+export async function addMission(id: string, _: FormState, fd: FormData): Promise<FormState> {
+  const { user, e } = await managed(id);
+  if (!e.cfg.features.missions) return { error: "Your package doesn't include snap missions." };
+  const title = String(fd.get("title") ?? "").replace(/[<>]/g, "").trim().slice(0, 80);
+  if (!title) return { error: "Give the mission a name." };
+  const n = await one<{ n: number; max: number }>("select count(*)::int as n, coalesce(max(sort), 0)::int as max from event_missions where event_id = $1", [e.id]);
+  if ((n?.n ?? 0) >= 30) return { error: "That's plenty of missions (30 max)." };
+  await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, title, cleanEmoji(fd.get("emoji")), (n?.max ?? 0) + 1]);
+  await audit(user.id, "mission.add", e.id, { title });
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  return { ok: "Mission added." };
+}
+
+export async function addPresetMissions(id: string) {
+  const { e } = await managed(id);
+  if (!e.cfg.features.missions) return;
+  const existing = new Set((await q<{ title: string }>("select title from event_missions where event_id = $1", [e.id])).map((r) => r.title));
+  let sort = (await one<{ max: number }>("select coalesce(max(sort), 0)::int as max from event_missions where event_id = $1", [e.id]))?.max ?? 0;
+  for (const m of MISSION_PRESETS) {
+    if (existing.has(m.title)) continue;
+    await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, m.title, m.emoji, ++sort]);
+  }
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
+}
+
+export async function deleteMission(id: string, missionId: string) {
+  const { user, e } = await managed(id);
+  await q("delete from event_missions where id = $2 and event_id = $1", [e.id, missionId]);
+  await audit(user.id, "mission.delete", e.id, { mission: missionId });
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
+}
+
+export async function moveMission(id: string, missionId: string, dir: -1 | 1) {
+  const { e } = await managed(id);
+  await tx(async (c) => {
+    const list = await q<{ id: string }>("select id from event_missions where event_id = $1 order by sort, created_at for update", [e.id], c);
+    const i = list.findIndex((m) => m.id === missionId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    for (const [k, m] of list.entries()) await q("update event_missions set sort = $2 where id = $1", [m.id, k + 1], c);
+  });
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
+}
+
+export async function toggleWish(id: string, wishId: string, hidden: boolean) {
+  const { user, e } = await managed(id);
+  await setWishHidden(e.id, wishId, hidden);
+  await audit(user.id, hidden ? "wish.hide" : "wish.show", e.id, { wish: wishId });
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
 }

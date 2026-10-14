@@ -15,8 +15,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const guest = await currentGuest(e.id);
   if (!guest) return NextResponse.json({ error: "Please join the event first.", code: "join" }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as { files?: { type?: unknown; size?: unknown }[] } | null;
-  const files = (body?.files ?? []).slice(0, MAX_FILES_PER_REQUEST).map((f) => ({ type: String(f.type ?? ""), size: Number(f.size) }));
+  const body = (await req.json().catch(() => null)) as { files?: { type?: unknown; size?: unknown; mission?: unknown }[] } | null;
+  const files = (body?.files ?? []).slice(0, MAX_FILES_PER_REQUEST).map((f) => ({
+    type: String(f.type ?? ""),
+    size: Number(f.size),
+    mission: typeof f.mission === "string" ? f.mission : null,
+  }));
   if (!files.length) return NextResponse.json({ error: "No files." }, { status: 400 });
 
   const perMinute = await getSetting("upload_rate_per_minute");
