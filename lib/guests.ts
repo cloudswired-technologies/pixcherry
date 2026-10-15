@@ -56,17 +56,53 @@ export type JoinResult = { ok: true; guest: Guest; key: string } | { ok: false; 
 
 const ipHash = async () => sha256(`ip:${await clientIp()}`).slice(0, 16);
 
+/** "2001:db8:a:b::1" -> "2001:0db8:000a:000b" (the /64 a Wi-Fi or a phone's data line keeps all day). */
+function v6Prefix(ip: string) {
+  const [head, tail] = ip.split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail ? tail.split(":") : [];
+  const full = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return full.slice(0, 4).map((x) => x.padStart(4, "0").toLowerCase()).join(":");
+}
+
+/** Network of this request: IPv4 address, or IPv6 /64 (privacy addresses rotate inside it). */
+async function netHash() {
+  const ip = await clientIp();
+  const v4 = ip.match(/(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  return sha256(`net:${v4 ?? (ip.includes(":") ? v6Prefix(ip) : ip)}`).slice(0, 16);
+}
+
+/** Device signals sent by the phone (lib/client/device.ts), validated and trimmed. */
+export type DeviceInfo = { s: string; r: number; t: string; p: number; c: number; g: string; o: string };
+export function parseDevice(raw: unknown): DeviceInfo | null {
+  try {
+    const d = JSON.parse(String(raw ?? "")) as Partial<DeviceInfo>;
+    if (typeof d.s !== "string" || !/^\d{2,5}x\d{2,5}$/.test(d.s)) return null;
+    return {
+      s: d.s,
+      r: Math.round(Number(d.r) * 100) / 100 || 0,
+      t: String(d.t ?? "").slice(0, 60),
+      p: Math.min(99, Math.max(0, Math.round(Number(d.p) || 0))),
+      c: Math.min(512, Math.max(0, Math.round(Number(d.c) || 0))),
+      g: String(d.g ?? "").slice(0, 80),
+      o: String(d.o ?? "").slice(0, 20),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Creates the guest (respecting the event's guest limit) and sets the cookie. */
-export async function joinEvent(e: EventWithConfig, name: string | null, device: string | null = null, samePhoneAs: string | null = null): Promise<JoinResult> {
+export async function joinEvent(e: EventWithConfig, name: string | null, device: DeviceInfo | null = null, samePhoneAs: string | null = null): Promise<JoinResult> {
   const token = randomToken();
-  const ip = await ipHash();
+  const [ip, net] = await Promise.all([ipHash(), netHash()]);
   const guest = await tx(async (c) => {
     const ev = await one<{ guest_count: number }>("select guest_count from events where id = $1 for update", [e.id], c);
     if (!ev || ev.guest_count >= e.cfg.limits.max_guests) return null;
     const g = await one<Guest>(
-      `insert into guests (event_id, name, token_hash, ip_hash, device_hash, same_phone_as) values ($1, $2, $3, $4, $5, $6)
+      `insert into guests (event_id, name, token_hash, ip_hash, net_hash, device_info, same_phone_as) values ($1, $2, $3, $4, $5, $6, $7)
        returning id, event_id, name, upload_count, is_blocked`,
-      [e.id, name, sha256(token), ip, device, samePhoneAs],
+      [e.id, name, sha256(token), ip, net, device ? JSON.stringify(device) : null, samePhoneAs],
       c,
     );
     await q("update events set guest_count = guest_count + 1 where id = $1", [e.id], c);
@@ -78,25 +114,35 @@ export async function joinEvent(e: EventWithConfig, name: string | null, device:
   return { ok: true, guest, key };
 }
 
-export type PhoneMatch = { id: string; name: string | null; photos: number; blocked: boolean; byDevice: boolean };
+export type PhoneMatch = { id: string; name: string | null; photos: number; blocked: boolean; byDevice: boolean; sameNet: boolean };
 
 /**
- * An earlier guest who is probably this person on another browser of the same
- * phone. Always needs the same network, plus either the same device signature
- * or the same name. Device matches rank first.
+ * An earlier guest who is probably this person on another browser of the same phone.
+ * Signals, matched loosely and together:
+ *  - device: same screen, pixel ratio, time zone and touch points, plus the same GPU or
+ *    the same CPU core count (one browser may hide one of them);
+ *  - network: same IPv4, or same IPv6 /64;
+ *  - name: same name (case-insensitive) on the same network.
  */
-export async function findSamePhone(eventId: string, name: string | null, device: string | null): Promise<PhoneMatch | null> {
+export async function findSamePhone(eventId: string, name: string | null, device: DeviceInfo | null): Promise<PhoneMatch | null> {
   if (!name && !device) return null;
-  const r = await one<{ id: string; name: string | null; photos: number; is_blocked: boolean; by_device: boolean }>(
-    `select g.id, g.name, g.is_blocked, (g.device_hash is not distinct from $4 and $4 is not null) as by_device,
-       (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos
-     from guests g
-     where g.event_id = $1 and g.ip_hash = $2 and g.same_phone_as is null
-       and (($4::text is not null and g.device_hash = $4) or ($3::text is not null and lower(g.name) = lower($3)))
-     order by (g.device_hash = $4) desc nulls last, g.upload_count desc, g.created_at limit 1`,
-    [eventId, await ipHash(), name, device],
+  const [ip, net] = await Promise.all([ipHash(), netHash()]);
+  const r = await one<{ id: string; name: string | null; photos: number; is_blocked: boolean; by_device: boolean; same_net: boolean }>(
+    `select * from (
+       select g.id, g.name, g.is_blocked, g.upload_count, g.created_at,
+         (g.net_hash = $3 or g.ip_hash = $2) as same_net,
+         coalesce($5::jsonb is not null and g.device_info is not null
+           and g.device_info->>'s' = $5::jsonb->>'s' and g.device_info->>'r' = $5::jsonb->>'r'
+           and g.device_info->>'t' = $5::jsonb->>'t' and g.device_info->>'p' = $5::jsonb->>'p'
+           and (g.device_info->>'g' = $5::jsonb->>'g' or g.device_info->>'c' = $5::jsonb->>'c'), false) as by_device,
+         (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos
+       from guests g where g.event_id = $1 and g.same_phone_as is null
+     ) x
+     where x.by_device or (x.same_net and $4::text is not null and lower(x.name) = lower($4))
+     order by x.by_device desc, x.same_net desc, x.upload_count desc, x.created_at limit 1`,
+    [eventId, ip, net, name, device ? JSON.stringify(device) : null],
   );
-  return r ? { id: r.id, name: r.name, photos: r.photos, blocked: r.is_blocked, byDevice: r.by_device } : null;
+  return r ? { id: r.id, name: r.name, photos: r.photos, blocked: r.is_blocked, byDevice: r.by_device, sameNet: r.same_net } : null;
 }
 
 /**

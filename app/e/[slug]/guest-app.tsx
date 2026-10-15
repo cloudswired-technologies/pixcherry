@@ -30,7 +30,7 @@ import { Turnstile } from "@/components/turnstile";
 import type { Quality } from "@/lib/client/compress";
 import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
-import { deviceSignature } from "@/lib/client/device";
+import { deviceSignals } from "@/lib/client/device";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
@@ -968,7 +968,7 @@ function JoinForm({
   const [taken, setTaken] = useState<JoinState["nameTaken"] | null>(null);
   const [busy, startBusy] = useTransition();
   useEffect(() => {
-    deviceSignature().then(setDevice);
+    deviceSignals().then((d) => setDevice(d ? JSON.stringify(d) : ""));
   }, []);
   useEffect(() => {
     if (!siteKey) return;

@@ -1,28 +1,27 @@
-// A short signature of the phone itself (not the browser): screen, pixel ratio,
-// GPU, CPU cores, touch points, OS version and time zone. Chrome, Edge, Samsung
-// Internet and in-app browsers on one phone produce the same value, so a second
-// browser can't quietly become a second guest. Same-model phones on the same
-// Wi-Fi can collide, which is why it's only ever combined with other signals.
+// Signals of the phone itself (not the browser): screen, pixel ratio, time zone,
+// touch points, CPU cores, GPU and OS. Sent as separate values so the server can
+// match them loosely: one browser hiding the GPU name (Edge) or reporting a
+// different OS string mustn't make the same phone look new. Same-model phones
+// can look alike, so these are only ever used together with other signals.
 
-export async function deviceSignature(): Promise<string> {
+export type DeviceInfo = { s: string; r: number; t: string; p: number; c: number; g: string; o: string };
+
+export async function deviceSignals(): Promise<DeviceInfo | null> {
   try {
     const gl = document.createElement("canvas").getContext("webgl");
     const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
     const gpu = gl ? String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : "";
-    const os = navigator.userAgent.match(/Android [\d.]+|iPhone OS [\d_]+|iPad|CPU OS [\d_]+|Windows NT [\d.]+|Mac OS X [\d_]+|CrOS|Linux/)?.[0] ?? "";
-    const parts = [
-      Math.min(screen.width, screen.height),
-      Math.max(screen.width, screen.height),
-      window.devicePixelRatio,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-      navigator.hardwareConcurrency,
-      navigator.maxTouchPoints,
-      gpu,
-      os,
-    ];
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
-    return Array.from(new Uint8Array(buf).slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+    const os = navigator.userAgent.match(/Android|iPhone|iPad|CPU OS|Windows|Mac OS X|CrOS|Linux/)?.[0] ?? "";
+    return {
+      s: `${Math.min(screen.width, screen.height)}x${Math.max(screen.width, screen.height)}`,
+      r: Math.round(window.devicePixelRatio * 100) / 100,
+      t: Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
+      p: navigator.maxTouchPoints ?? 0,
+      c: navigator.hardwareConcurrency ?? 0,
+      g: gpu.slice(0, 80),
+      o: os,
+    };
   } catch {
-    return "";
+    return null;
   }
 }

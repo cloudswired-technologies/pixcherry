@@ -8,7 +8,11 @@ let n = 0;
 
 /** Pretends this context is the phone with the given id. */
 export const asPhone = (ctx: BrowserContext, id: number) =>
-  ctx.addInitScript((v) => Object.defineProperty(Navigator.prototype, "hardwareConcurrency", { get: () => v, configurable: true }), id);
+  ctx.addInitScript((v) => {
+    // The join matches screen + GPU/cores, so give each "phone" its own screen width and core count.
+    Object.defineProperty(Navigator.prototype, "hardwareConcurrency", { get: () => v, configurable: true });
+    Object.defineProperty(Screen.prototype, "width", { get: () => 300 + (v % 997), configurable: true });
+  }, id);
 
 /** From now on, every new context of this browser is a different phone. */
 export function distinctPhones(browser: Browser) {
@@ -18,7 +22,7 @@ export function distinctPhones(browser: Browser) {
   const make = browser.newContext.bind(browser);
   browser.newContext = async (opts) => {
     const ctx = await make(opts);
-    await asPhone(ctx, 1000 + ++n * 7 + Math.floor(Math.random() * 100_000));
+    await asPhone(ctx, 1000 + ++n); // unique within a run, so no two test phones look alike
     return ctx;
   };
 }

@@ -296,6 +296,41 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await expect(g8.getByRole("button", { name: "You: Ali" })).toBeVisible();
   const [ali] = await sql("select g.same_phone_as = s.id as flagged from guests g, guests s where g.event_id = $1 and g.name = 'Ali' and s.event_id = $1 and s.name = 'Siti Aminah'", [ev.id]);
   expect(ali.flagged).toBe(true);
+  await sql("update events set one_phone_one_roll = true where id = $1", [ev.id]);
+
+  // Same phone hours later on another network (Chrome then Edge, IP changed): asked, not silently a new guest.
+  const c9 = await browser.newContext({ ...PHONE, extraHTTPHeaders: { "cf-connecting-ip": "203.0.113.5" } });
+  await asPhone(c9, 4242);
+  const g9 = await c9.newPage();
+  await seenInstall(g9, slug);
+  await g9.goto(`/e/${slug}`);
+  await g9.getByRole("button", { name: "Join", exact: true }).click();
+  await g9.getByLabel("Your name").fill("Yaya");
+  await g9.getByRole("button", { name: /Let's go/ }).click();
+  const ask = g9.getByRole("group", { name: "Welcome back" });
+  await expect(ask).toContainText("This phone already joined");
+  await expect(ask.getByRole("button", { name: "Yes, continue as Siti Aminah" })).toBeVisible();
+  await expect(ask.getByRole("button", { name: "No, I'm someone else" })).toBeVisible();
+
+  // IPv6 privacy addresses change, the /64 doesn't: same phone + same /64 = strict.
+  const v6 = async (addr: string) => {
+    const ctx = await browser.newContext({ ...PHONE, extraHTTPHeaders: { "cf-connecting-ip": addr } });
+    await asPhone(ctx, 5555);
+    const pg2 = await ctx.newPage();
+    await seenInstall(pg2, slug);
+    await pg2.goto(`/e/${slug}`);
+    await pg2.getByRole("button", { name: "Join", exact: true }).click();
+    return { ctx, pg: pg2 };
+  };
+  const b1 = await v6("2001:db8:1:2:aaaa:bbbb:cccc:1");
+  await b1.pg.getByLabel("Your name").fill("Bea");
+  await b1.pg.getByRole("button", { name: /Let's go/ }).click();
+  await expect(b1.pg.getByRole("button", { name: "You: Bea" })).toBeVisible();
+  const b2 = await v6("2001:db8:1:2::99");
+  await b2.pg.getByLabel("Your name").fill("Someone");
+  await b2.pg.getByRole("button", { name: /Let's go/ }).click();
+  await expect(b2.pg.getByRole("group", { name: "Welcome back" })).toContainText("This phone is already in the album as Bea");
+  for (const c of [c9, b1.ctx, b2.ctx]) await c.close();
 
   // ---------------------------------------------------------------- organiser dashboard
   await page.goto(`/dashboard/events/${ev.id}`);
