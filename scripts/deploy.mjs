@@ -12,6 +12,8 @@ import { join } from "node:path";
 
 const HOST = process.env.DEPLOY_HOST ?? "pixcherry";
 const APP_URL = process.env.DEPLOY_APP_URL ?? "https://pixcherry.com";
+// Guest pages live on their own host (app.pixcherry.com/<event>); the server .env sets it too.
+const GUEST_URL = process.env.DEPLOY_GUEST_URL ?? "https://app.pixcherry.com";
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit", ...opts });
 const ssh = (script) => execFileSync("ssh", [HOST, "bash -s"], { input: script.replace(/\r/g, ""), stdio: ["pipe", "inherit", "inherit"] });
 
@@ -22,6 +24,7 @@ if (!process.argv.includes("--no-build")) {
     env: {
       ...process.env,
       APP_URL,
+      GUEST_URL,
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.DEPLOY_TURNSTILE_SITE_KEY ?? "",
       NODE_ENV: "production",
     },
