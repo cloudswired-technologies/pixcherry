@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronRight, RefreshCw, RotateCcw } from "lucide-r
 import { LOOKS, createRenderer, drawOverlays, polaroid, stampText, type Look, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, playShutter, unlockAudio } from "@/lib/client/camera-sounds";
 import type { Quality } from "@/lib/client/compress";
+import { stillPhoto } from "@/lib/client/still";
 import { TagPicker } from "./panels";
 
 // Disposable camera. GPU viewfinder with film looks (the photo is rendered by
@@ -15,6 +16,8 @@ type Mission = { id: string; title: string; emoji: string | null };
 type Shot = { file: File; url: string };
 
 const MAX_CANVAS_PIXELS = 16_000_000;
+// Longest side of a camera shot. Sharp on any phone screen and still a quick upload.
+const STILL_MAX_PX = 3072;
 
 export function DisposableCamera({
   onClose,
@@ -52,7 +55,9 @@ export function DisposableCamera({
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [gl, setGl] = useState(true);
-  const [lookIdx, setLookIdx] = useState(1);
+  // Natural first: clean and sharp; the film looks are one tap away.
+  const [lookIdx, setLookIdx] = useState(0);
+  const track = useRef<MediaStreamTrack | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [shutter, setShutter] = useState(0);
   const [review, setReview] = useState<Shot | null>(null);
@@ -114,6 +119,7 @@ export function DisposableCamera({
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
         const v = video.current!;
         v.srcObject = stream;
+        track.current = stream.getVideoTracks()[0] ?? null;
         await v.play().catch(() => {});
         setReady(true);
       } catch (e) {
@@ -193,11 +199,18 @@ export function DisposableCamera({
       { duration: 220, easing: "ease-out" },
     );
     setBusy(true);
+    let still: ImageBitmap | null = null;
     try {
-      let scale = quality.maxPx ? Math.min(1, quality.maxPx / Math.max(v.videoWidth, v.videoHeight)) : 1;
-      scale = Math.min(scale, Math.sqrt(MAX_CANVAS_PIXELS / (v.videoWidth * v.videoHeight)));
-      let w = Math.round(v.videoWidth * scale);
-      let h = Math.round(v.videoHeight * scale);
+      // Prefer a real still photo (sharper); capped so uploads stay quick even on "Original".
+      const cap = Math.min(quality.maxPx ?? STILL_MAX_PX, STILL_MAX_PX);
+      still = await stillPhoto(track.current ?? undefined, cap);
+      const src: TexImageSource = still ?? v;
+      const sw = still ? still.width : v.videoWidth;
+      const sh = still ? still.height : v.videoHeight;
+      let scale = Math.min(1, cap / Math.max(sw, sh));
+      scale = Math.min(scale, Math.sqrt(MAX_CANVAS_PIXELS / (sw * sh)));
+      let w = Math.round(sw * scale);
+      let h = Math.round(sh * scale);
       const out = document.createElement("canvas");
       const l = lookRef.current;
       if (gl) {
@@ -213,7 +226,7 @@ export function DisposableCamera({
           }
           cc.width = w;
           cc.height = h;
-          r.draw(v, l, { mirror: facing === "user", time: Math.random() * 100 });
+          r.draw(src, l, { mirror: facing === "user", time: Math.random() * 100 });
         }
         out.width = w;
         out.height = h;
@@ -226,7 +239,8 @@ export function DisposableCamera({
           c2.translate(w, 0);
           c2.scale(-1, 1);
         }
-        c2.drawImage(v, 0, 0, w, h);
+        c2.imageSmoothingQuality = "high";
+        c2.drawImage(src as CanvasImageSource, 0, 0, w, h);
         c2.setTransform(1, 0, 0, 1, 0, 0);
       }
       drawOverlays(out.getContext("2d")!, w, h, l);
@@ -244,6 +258,7 @@ export function DisposableCamera({
         setTimeout(() => setReview({ file, url: URL.createObjectURL(file) }), 180);
       }
     } finally {
+      still?.close();
       setTimeout(() => setBusy(false), 200);
     }
   }, [ready, busy, shotsLeft, quality, facing, gl, maxBytes, caption]);

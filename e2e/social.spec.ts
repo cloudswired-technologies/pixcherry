@@ -149,6 +149,10 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   // ---------------------------------------------------------------- comments
   await g1.getByRole("button", { name: "All Photos", exact: true }).click();
   await g1.getByAltText("Photo by Siti Aminah").first().click();
+  // Zoom loads the full-size file.
+  await g1.getByRole("button", { name: "Zoom in" }).click();
+  await expect(g1.getByAltText("Full size photo")).toHaveAttribute("src", /full.jpg/);
+  await g1.getByRole("button", { name: "Close zoom" }).click();
   await g1.getByRole("button", { name: "Comments" }).click();
   await expect(g1.getByText("No comments yet")).toBeVisible();
   await g1.getByLabel("Add a comment").fill("So pretty! 😍");
@@ -233,7 +237,7 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   // The first browser is still signed in too.
   await g1.reload();
   await expect(g1.getByRole("button", { name: "You: Siti Aminah" })).toBeVisible();
-  // "No, I'm someone else" makes a separate guest.
+  // "No, I'm someone else" → names are unique, so they pick another one ("Nora 2").
   const c6 = await browser.newContext(PHONE);
   const g6 = await c6.newPage();
   await seenInstall(g6, slug);
@@ -242,8 +246,26 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await g6.getByLabel("Your name").fill("Nora");
   await g6.getByRole("button", { name: /Let's go/ }).click();
   await g6.getByRole("group", { name: "Welcome back" }).getByRole("button", { name: "No, I'm someone else" }).click();
-  await expect(g6.getByRole("button", { name: "You: Nora" })).toBeVisible();
-  expect(await sql("select id from guests where event_id = $1 and name = 'Nora'", [ev.id])).toHaveLength(2);
+  await expect(g6.getByRole("alert").filter({ hasText: "Someone here is already called Nora" })).toBeVisible();
+  await g6.getByRole("button", { name: "Use “Nora 2”" }).click();
+  await expect(g6.getByLabel("Your name")).toHaveValue("Nora 2");
+  await g6.getByRole("button", { name: /Let's go/ }).click();
+  await expect(g6.getByRole("button", { name: "You: Nora 2" })).toBeVisible();
+  expect(await sql("select name from guests where event_id = $1 and name like 'Nora%' order by name", [ev.id])).toEqual([{ name: "Nora" }, { name: "Nora 2" }]);
+  // Renaming to a taken name is refused too.
+  await g6.getByRole("button", { name: "You: Nora 2" }).click();
+  await g6.getByRole("button", { name: "Edit name" }).click();
+  await g6.getByLabel("Your name").fill("siti aminah");
+  await g6.getByRole("button", { name: "Save" }).click();
+  await expect(g6.getByRole("alert").filter({ hasText: "Someone here is already called siti aminah" })).toBeVisible();
+  await g6.getByRole("dialog", { name: "You" }).getByRole("button", { name: "Close" }).click();
+  // Someone else's upload in progress shows as a tile on this phone.
+  const [siti] = await sql("select id from guests where event_id = $1 and name = 'Siti Aminah'", [ev.id]);
+  const [fake] = await sql("insert into photos (event_id, guest_id, content_type, declared_bytes) values ($1, $2, 'image/jpeg', 1000) returning id", [ev.id, siti.id]);
+  await g6.getByRole("button", { name: "All Photos", exact: true }).click();
+  await expect(g6.getByText("Siti Aminah is sharing…").first()).toBeVisible({ timeout: 15_000 });
+  await sql("delete from photos where id = $1", [fake.id]);
+  await expect(g6.getByText("Siti Aminah is sharing…")).toHaveCount(0, { timeout: 15_000 });
 
   // ---------------------------------------------------------------- one phone, one roll (device + network)
   // Siti's phone in yet another browser, typing a different name: strict mode keeps her roll.
@@ -280,16 +302,17 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await expect(page.getByRole("heading", { name: "🏆 Top snappers" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mission masters" })).toBeVisible();
   await expect(page.getByRole("main").getByText("Siti Aminah").first()).toBeVisible();
-  // Guests: the flagged same-phone guest is merged into Siti; one Nora is removed.
+  // Guests: the flagged same-phone guest is merged into Siti; Nora 2 is removed.
   await page.goto(`/dashboard/events/${ev.id}/guests`);
   await expect(page.getByText("Possibly the same phone (1)")).toBeVisible();
   await page.getByRole("button", { name: "Merge" }).click();
   await page.getByRole("alertdialog", { name: "Merge into Siti Aminah?" }).getByRole("button", { name: "Merge" }).click();
   await expect(page.getByText("Possibly the same phone")).toHaveCount(0);
   expect(await sql("select id from guests where event_id = $1 and name = 'Ali'", [ev.id])).toHaveLength(0);
-  await page.getByRole("button", { name: "Remove Nora" }).first().click();
-  await page.getByRole("alertdialog", { name: "Remove Nora?" }).getByRole("button", { name: "Remove guest" }).click();
-  await expect(page.getByRole("button", { name: "Remove Nora" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove Nora 2" }).click();
+  await page.getByRole("alertdialog", { name: "Remove Nora 2?" }).getByRole("button", { name: "Remove guest" }).click();
+  await expect(page.getByRole("button", { name: "Remove Nora 2" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove Nora", exact: true })).toHaveCount(1);
   // Photos: most loved sort and a guest filter.
   await page.goto(`/dashboard/events/${ev.id}/photos?sort=top`);
   await expect(page.getByRole("link", { name: "Most loved" })).toHaveClass(/bg-ink/);

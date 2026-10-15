@@ -222,8 +222,42 @@ export function GuestApp(p: Props) {
   const inGallery = useMemo(() => new Set(all.photos.map((x) => x.id)), [all.photos]);
   const [now, setNow] = useState(0);
   const pending: PendingTile[] = up.items.filter((i) => i.status !== "error" && !(i.photoId && inGallery.has(i.photoId)) && !(i.doneAt && now - i.doneAt > 60_000));
+  // Other guests' uploads (from the album pulse) show as tiles too, so everyone sees the buzz.
+  const [others, setOthers] = useState<{ guest: string | null; name: string | null; n: number }[]>([]);
+  const otherTiles: PendingTile[] = others.flatMap((u) =>
+    Array.from({ length: Math.min(u.n, 3) }, (_, i) => ({ key: `o-${u.guest}-${i}`, status: "uploading", progress: 0, by: u.name })),
+  ).slice(0, 6);
+  const tiles = [...pending, ...otherTiles];
   const processing = pending.some((i) => i.status === "done");
   const pollAll = all.poll;
+  const meRef = useRef<string | null>(p.guest?.id ?? null);
+  useEffect(() => {
+    meRef.current = joined?.id ?? null;
+  }, [joined]);
+  const latestRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tick = async () => {
+      if (document.hidden) return;
+      const r = await fetch(`/api/e/${p.slug}/pulse`).catch(() => null);
+      if (!r?.ok) return;
+      const b = (await r.json()) as { latest: string | null; uploading: { guest: string | null; name: string | null; n: number }[] };
+      setOthers(b.uploading.filter((u) => u.guest !== meRef.current));
+      if (b.latest && b.latest !== latestRef.current) {
+        // A new photo landed somewhere: fetch it now instead of waiting for the slow poll.
+        if (latestRef.current) {
+          pollAll();
+          loadStats();
+        }
+        latestRef.current = b.latest;
+      }
+    };
+    const first = setTimeout(tick, 1000);
+    const t = setInterval(tick, 5000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [p.slug, pollAll, loadStats]);
   useEffect(() => {
     if (!processing) return;
     const t = setInterval(() => {
@@ -617,7 +651,7 @@ export function GuestApp(p: Props) {
                   All photos <ArrowRight className="size-4" aria-hidden />
                 </button>
               </div>
-              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} pending={pending} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
+              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} pending={tiles} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
             </section>
           </div>
         ) : tab === "missions" && hasMissions ? (
@@ -657,7 +691,7 @@ export function GuestApp(p: Props) {
                 </select>
               </label>
             </div>
-            <Masonry gallery={all} pending={order === "new" ? pending : undefined} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
+            <Masonry gallery={all} pending={order === "new" ? tiles : undefined} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
           </section>
         )}
       </main>
@@ -931,6 +965,7 @@ function JoinForm({
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<JoinState["match"] | null>(null);
   const [device, setDevice] = useState("");
+  const [taken, setTaken] = useState<JoinState["nameTaken"] | null>(null);
   const [busy, startBusy] = useTransition();
   useEffect(() => {
     deviceSignature().then(setDevice);
@@ -952,6 +987,10 @@ function JoinForm({
     startBusy(async () => {
       const r = await join(slug, {}, fd);
       if (r.joined) return onJoined(r.joined);
+      if (r.nameTaken) {
+        setMatch(null);
+        return setTaken(r.nameTaken);
+      }
       if (r.match && !r.error) return setMatch(r.match);
       if (r.match) setMatch(r.match);
       setError(r.error ?? "Something went wrong. Please try again.");
@@ -981,6 +1020,16 @@ function JoinForm({
             className="h-12 rounded-2xl border border-input bg-background px-4 outline-none focus:border-brand"
           />
         </label>
+      ) : null}
+      {taken && taken.name.toLowerCase() === name.trim().toLowerCase() ? (
+        <NameTaken
+          message={`Someone here is already called ${taken.name}. Add your surname or a nickname so friends can tell you apart.`}
+          suggestion={taken.suggestion}
+          onPick={(v) => {
+            setName(v);
+            setTaken(null);
+          }}
+        />
       ) : null}
       {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} onInteractive={() => setTick(true)} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
@@ -1041,12 +1090,15 @@ function YouPanel({
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(joined.name ?? "");
+  const [clash, setClash] = useState<{ error: string; suggestion: string | null } | null>(null);
   const [busy, startBusy] = useTransition();
   const save = () =>
     startBusy(async () => {
       const r = await rename(slug, name);
+      if (r.error) return setClash({ error: r.error, suggestion: r.suggestion ?? null });
+      setClash(null);
       setEditing(false);
-      onRenamed(r ?? null);
+      onRenamed(r.name ?? null);
     });
   return (
     <div className="grid gap-4">
@@ -1072,6 +1124,16 @@ function YouPanel({
           </div>
         )}
       </div>
+      {editing && clash ? (
+        <NameTaken
+          message={clash.error}
+          suggestion={clash.suggestion}
+          onPick={(v) => {
+            setName(v);
+            setClash(null);
+          }}
+        />
+      ) : null}
       <div className="grid grid-cols-2 gap-2 text-center">
         {shotsLeft !== null ? (
           <div className="rounded-2xl bg-background p-3">
@@ -1092,6 +1154,19 @@ function YouPanel({
         <MoreItem icon={User} label="My photos" onClick={onMyPhotos} />
         {onInstall ? <MoreItem icon={Smartphone} label="Add to home screen" onClick={onInstall} /> : null}
       </div>
+    </div>
+  );
+}
+
+function NameTaken({ message, suggestion, onPick }: { message: string; suggestion: string | null; onPick: (name: string) => void }) {
+  return (
+    <div className="grid gap-2 rounded-2xl bg-warn-soft px-3 py-2.5 text-sm text-warn" role="alert">
+      <p>{message}</p>
+      {suggestion ? (
+        <button type="button" onClick={() => onPick(suggestion)} className="justify-self-start rounded-full bg-white px-3 py-1 text-xs font-bold text-ink shadow-soft">
+          Use “{suggestion}”
+        </button>
+      ) : null}
     </div>
   );
 }

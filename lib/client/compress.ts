@@ -39,6 +39,39 @@ async function decode(file: File): Promise<{ img: CanvasImageSource; w: number; 
   }
 }
 
+/**
+ * Downscales without the soft, smeared look of one big drawImage step:
+ * the browser's high-quality resampler where it exists, else halving in steps.
+ */
+async function drawSharp(ctx: CanvasRenderingContext2D, img: CanvasImageSource, sw: number, sh: number, w: number, h: number) {
+  if (w >= sw) return ctx.drawImage(img, 0, 0, w, h);
+  try {
+    const b = await createImageBitmap(img as ImageBitmapSource, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+    ctx.drawImage(b, 0, 0, w, h);
+    b.close();
+    return;
+  } catch {
+    /* Safari without resize options: step down below */
+  }
+  let cur: CanvasImageSource = img;
+  let cw = sw;
+  let ch = sh;
+  while (cw / 2 > w) {
+    const step = document.createElement("canvas");
+    step.width = Math.round(cw / 2);
+    step.height = Math.round(ch / 2);
+    const sc = step.getContext("2d")!;
+    sc.imageSmoothingQuality = "high";
+    sc.drawImage(cur, 0, 0, step.width, step.height);
+    if (cur instanceof HTMLCanvasElement) cur.width = cur.height = 0;
+    cur = step;
+    cw = step.width;
+    ch = step.height;
+  }
+  ctx.drawImage(cur, 0, 0, w, h);
+  if (cur instanceof HTMLCanvasElement) cur.width = cur.height = 0;
+}
+
 function toBlob(canvas: HTMLCanvasElement, q: number) {
   return new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", q));
 }
@@ -61,7 +94,7 @@ export async function prepare(file: File, quality: Quality, maxBytes: number): P
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("canvas unavailable");
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(src.img, 0, 0, w, h);
+    await drawSharp(ctx, src.img, src.w, src.h, w, h);
     let q = quality.jpeg / 100;
     for (;;) {
       const blob = await toBlob(canvas, q);

@@ -1,7 +1,7 @@
 "use server";
 
 import { getEventBySlug } from "@/lib/events";
-import { cleanName, continueAsGuest, currentGuest, currentGuestKey, findSamePhone, joinEvent, renameGuest } from "@/lib/guests";
+import { cleanName, continueAsGuest, currentGuest, currentGuestKey, findSamePhone, joinEvent, nameClash, renameGuest } from "@/lib/guests";
 import { uploadsOpen } from "@/lib/limits";
 import { rateLimit } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
@@ -14,6 +14,8 @@ export type JoinState = {
    * strict = same phone (device + network) and the event allows one roll per phone, so no "someone else".
    */
   match?: { id: string; name: string | null; photos: number; byDevice: boolean; strict: boolean };
+  /** Someone in this album already uses the name; suggestion is a free variant ("Shukry 2"). */
+  nameTaken?: { name: string; suggestion: string | null };
 };
 
 export async function join(slug: string, _: JoinState, fd: FormData): Promise<JoinState> {
@@ -34,6 +36,12 @@ export async function join(slug: string, _: JoinState, fd: FormData): Promise<Jo
   const match = found && !found.blocked ? { id: found.id, name: found.name, photos: found.photos, byDevice: found.byDevice, strict: found.byDevice && e.one_phone_one_roll } : null;
   if (match && !same) return { match }; // the bot-check token is only spent on the final submit
   if (match?.strict && same !== `yes:${match.id}`) return { match, error: "This phone already has a roll in this album." };
+  // Names are unique in an album, so everyone can tell who's who.
+  const continuing = !!match && same === `yes:${match.id}`;
+  if (!continuing && name) {
+    const clash = await nameClash(e.id, name);
+    if (clash) return { nameTaken: { name, suggestion: clash.suggestion } };
+  }
   if (!(await verifyTurnstile(String(fd.get("cf-turnstile-response") ?? "")))) return { error: "Please complete the check and try again." };
   if (match && same === `yes:${match.id}`) {
     const r = await continueAsGuest(e.id, match.id);
@@ -45,12 +53,16 @@ export async function join(slug: string, _: JoinState, fd: FormData): Promise<Jo
   return { joined: { id: r.guest.id, name: r.guest.name, uploaded: 0, key: r.key } };
 }
 
-export async function rename(slug: string, name: string) {
+export async function rename(slug: string, name: string): Promise<{ name?: string | null; error?: string; suggestion?: string | null }> {
   const e = await getEventBySlug(slug);
-  if (!e) return null;
+  if (!e) return { error: "Album not found." };
   const g = await currentGuest(e.id);
-  if (!g) return null;
+  if (!g) return { error: "Please join first." };
   const clean = cleanName(name);
+  if (clean) {
+    const clash = await nameClash(e.id, clean, g.id);
+    if (clash) return { error: `Someone here is already called ${clean}.`, suggestion: clash.suggestion };
+  }
   await renameGuest(g.id, clean);
-  return clean;
+  return { name: clean };
 }

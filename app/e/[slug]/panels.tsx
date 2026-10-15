@@ -16,13 +16,20 @@ export const initial = (name: string | null) => (name ?? "G").trim().charAt(0).t
 // ------------------------------------------------------------------ masonry grid
 
 /** A photo the guest just shared that isn't in the gallery yet. */
-export type PendingTile = { key: string; preview: string; status: string; progress: number };
+export type PendingTile = { key: string; preview?: string; status: string; progress: number; /** Someone else's upload: "Siti is sharing…" */ by?: string | null };
 
 function Uploading({ t }: { t: PendingTile }) {
-  const label = t.status === "uploading" ? `Uploading ${Math.round(t.progress * 100)}%` : t.status === "done" ? "Almost there…" : "Getting ready…";
+  const other = t.by !== undefined;
+  const label = other ? `${t.by ?? "A guest"} is sharing…` : t.status === "uploading" ? `Uploading ${Math.round(t.progress * 100)}%` : t.status === "done" ? "Almost there…" : "Getting ready…";
   return (
     <div className="relative mb-2 block aspect-[3/4] w-full break-inside-avoid overflow-hidden rounded-2xl bg-muted [animation:pc-rise_0.3s_ease_both]" aria-busy="true">
-      <img src={t.preview} alt="" className="size-full scale-105 object-cover opacity-70 blur-[2px]" />
+      {t.preview ? (
+        <img src={t.preview} alt="" className="size-full scale-105 object-cover opacity-70 blur-[2px]" />
+      ) : (
+        <div className="grid size-full place-items-center bg-gradient-to-br from-brand-soft to-[#ffd8b0]">
+          <span className="grid size-12 place-items-center rounded-full bg-brand text-lg font-bold text-white shadow-soft">{initial(t.by ?? null)}</span>
+        </div>
+      )}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-transparent [animation:pc-shimmer_1.3s_ease-in-out_infinite]" />
       </div>
@@ -31,7 +38,11 @@ function Uploading({ t }: { t: PendingTile }) {
           <Loader2 className="size-3.5 animate-spin" aria-hidden /> {label}
         </div>
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/25">
-          <div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${t.status === "done" ? 100 : Math.max(6, t.progress * 100)}%` }} />
+          {other ? (
+            <div className="h-full w-1/3 rounded-full bg-white [animation:pc-shimmer_1.2s_ease-in-out_infinite]" />
+          ) : (
+            <div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${t.status === "done" ? 100 : Math.max(6, t.progress * 100)}%` }} />
+          )}
         </div>
       </div>
     </div>

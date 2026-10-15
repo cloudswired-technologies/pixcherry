@@ -99,6 +99,25 @@ export async function findSamePhone(eventId: string, name: string | null, device
   return r ? { id: r.id, name: r.name, photos: r.photos, blocked: r.is_blocked, byDevice: r.by_device } : null;
 }
 
+/**
+ * Names are unique per album (ignoring case), so People folders, leaderboards and
+ * comments never show two "Shukry". Returns a free suggestion when taken.
+ */
+export async function nameClash(eventId: string, name: string, exceptGuestId?: string) {
+  const taken = await q<{ n: string }>(
+    `select lower(name) n from guests where event_id = $1 and id <> coalesce($3::uuid, '00000000-0000-0000-0000-000000000000')
+       and (lower(name) = lower($2) or lower(name) like lower($2) || ' %')`,
+    [eventId, name, exceptGuestId ?? null],
+  );
+  const used = new Set(taken.map((t) => t.n));
+  if (!used.has(name.toLowerCase())) return null;
+  for (let i = 2; i < 100; i++) {
+    const s = `${name.slice(0, 56)} ${i}`;
+    if (!used.has(s.toLowerCase())) return { suggestion: s };
+  }
+  return { suggestion: null };
+}
+
 /** Signs this browser in as an existing guest (another browser keeps its own session). */
 export async function continueAsGuest(eventId: string, guestId: string) {
   const token = randomToken();
