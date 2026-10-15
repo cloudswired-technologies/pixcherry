@@ -1,18 +1,52 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, ExternalLink, Pencil, Printer, QrCode, Tv } from "lucide-react";
+import { ArrowRight, Camera, Download, ExternalLink, Heart, Images, MessageCircle, MessageCircleHeart, Pencil, QrCode, Sparkles, Tv, Users } from "lucide-react";
+import { Confirm } from "@/components/confirm";
 import { CopyButton } from "@/components/copy-button";
 import { Meter, PhaseBadge } from "@/components/event-bits";
-import { planLines } from "@/components/plan-card";
-import { Badge, Card, LinkButton, Notice, PageHeader, Stat, btn } from "@/components/ui";
+import { Card, LinkButton, Notice, btn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { q } from "@/lib/db";
-import { getManagedEvent, guestUrl } from "@/lib/events";
+import { recentComments } from "@/lib/comments";
+import { one, q } from "@/lib/db";
+import { eventStats, listMissions, listWishes, missionBoard } from "@/lib/engage";
+import { coverUrl, getManagedEvent, guestUrl } from "@/lib/events";
 import { formatBytes, formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
 import { getSetting } from "@/lib/settings";
 import { deleteDraft } from "../actions";
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+const initial = (n: string | null) => (n ?? "G").trim().charAt(0).toUpperCase() || "G";
+
+function Tile({ icon: Icon, label, value, sub, tone = "ink", children }: { icon: typeof Camera; label: string; value: string; sub?: string; tone?: "ink" | "brand"; children?: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <span className={`grid size-7 place-items-center rounded-lg ${tone === "brand" ? "bg-brand-soft text-brand" : "bg-muted text-ink"}`}>
+          <Icon className="size-4" aria-hidden />
+        </span>
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-extrabold tracking-tight">{value}</div>
+      {sub ? <div className="text-xs text-muted-foreground">{sub}</div> : null}
+      {children}
+    </div>
+  );
+}
+
+function SectionHead({ title, href, link }: { title: string; href?: string; link?: string }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h2 className="text-lg font-bold">{title}</h2>
+      {href ? (
+        <Link href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-brand">
+          {link ?? "See all"} <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
 
 export default async function EventOverview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,35 +55,48 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   if (!e) notFound();
   const phase = eventPhase(e);
   const range = `${formatDateTime(e.starts_at)} – ${formatDateTime(e.ends_at)}`;
+  const base = `/dashboard/events/${e.id}`;
 
   if (!e.paid_at) {
-    const del = deleteDraft.bind(null, e.id);
     return (
       <div className="mx-auto grid max-w-xl gap-6">
-        <PageHeader title={e.name} sub={range} actions={<PhaseBadge phase={phase} />} />
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">{e.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{range}</p>
+        </div>
         <Card className="grid gap-3">
           <h2 className="text-lg font-bold">One step left</h2>
           <p className="text-sm text-muted-foreground">Choose a package and pay to activate the event. Your QR code is ready straight after.</p>
           <div className="flex flex-wrap gap-2">
-            <LinkButton href={`/dashboard/events/${e.id}/checkout`} variant="brand">
+            <LinkButton href={`${base}/checkout`} variant="brand">
               Choose a package
             </LinkButton>
-            <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline">
+            <LinkButton href={`${base}/settings`} variant="outline">
               Edit details
             </LinkButton>
           </div>
         </Card>
-        <form action={del}>
-          <button className="text-sm text-danger underline">Delete this draft</button>
-        </form>
+        <Confirm action={deleteDraft.bind(null, e.id)} title="Delete this draft?" message="It hasn't been paid for, so nothing else is lost." confirm="Delete draft" className="justify-self-start text-sm text-danger underline">
+          Delete this draft
+        </Confirm>
       </div>
     );
   }
 
   const url = guestUrl(e.slug);
   const lim = e.cfg.limits;
-  const [recent, purchases, warnDays] = await Promise.all([
-    listPhotos(e.id, { order: "new", limit: 12 }),
+  const f = e.cfg.features;
+  const [stats, totals, missions, board, wishes, comments, recent, purchases, warnDays] = await Promise.all([
+    eventStats(e.id),
+    one<{ hearts: number; comments: number }>(
+      "select coalesce(sum(vote_count), 0)::int hearts, coalesce(sum(comment_count), 0)::int comments from photos where event_id = $1 and status = 'ready'",
+      [e.id],
+    ),
+    f.missions ? listMissions(e.id) : Promise.resolve([]),
+    f.missions ? missionBoard(e.id) : Promise.resolve(null),
+    f.wishes ? listWishes(e.id, { limit: 3 }) : Promise.resolve([]),
+    f.comments ? recentComments(e.id, 3) : Promise.resolve([]),
+    listPhotos(e.id, { order: "new", limit: 8 }),
     q<{ id: string; description: string; amount_cents: number; receipt_no: string; paid_at: Date }>(
       "select id, description, amount_cents, receipt_no, paid_at from purchases where event_id = $1 and status = 'paid' order by paid_at desc",
       [e.id],
@@ -58,100 +105,177 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   ]);
   const open = uploadsOpen(e, e.cfg);
   const soon = deletionSoon(e, Number(warnDays) || 3);
-  const snap = e.plan_snapshot!;
+  const cover = coverUrl(e);
+  const perMission = new Map(board?.missions.map((m) => [m.id, m.total]) ?? []);
 
   return (
     <div className="grid gap-6">
-      <PageHeader
-        title={e.name}
-        sub={[range, e.venue].filter(Boolean).join(" · ")}
-        actions={
-          <>
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl bg-ink text-white shadow-lift">
+        {cover ? <img src={cover} alt="" className="absolute inset-0 size-full object-cover opacity-40" /> : null}
+        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/30" />
+        <div className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-brand/40 blur-3xl" aria-hidden />
+        <div className="relative grid gap-4 p-5 sm:p-7">
+          <div className="flex flex-wrap items-center gap-2">
             <PhaseBadge phase={phase} />
             {!e.purged_at ? (
-              <>
-                <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline" size="sm">
-                  <Pencil aria-hidden /> Edit details
-                </LinkButton>
-                <a href={`${guestUrl(e.slug)}/recap`} target="_blank" rel="noreferrer" className={btn("outline", "sm")}>
-                  ✨ Recap
-                </a>
-                <a href={guestUrl(e.slug)} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
-                  <ExternalLink aria-hidden /> Guest page
-                </a>
-              </>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${open ? "bg-white/15" : "bg-white/10 text-white/70"}`}>
+                <span className={`size-1.5 rounded-full ${open ? "bg-[#4ade80]" : "bg-white/50"}`} /> {open ? "Uploads open" : "Uploads closed"}
+              </span>
             ) : null}
-          </>
-        }
-      />
+          </div>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{e.name}</h1>
+            <p className="mt-1 text-sm text-white/70">{[range, e.venue].filter(Boolean).join(" · ")}</p>
+          </div>
+          {!e.purged_at ? (
+            <div className="flex flex-wrap gap-2">
+              <a href={url} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
+                <ExternalLink aria-hidden /> Guest page
+              </a>
+              {f.slideshow ? (
+                <a href={`${url}/slideshow`} target="_blank" rel="noreferrer" className={btn("outline", "sm", "border-white/20 bg-white/10 text-white hover:bg-white/20")}>
+                  <Tv aria-hidden /> Slideshow
+                </a>
+              ) : null}
+              <a href={`${url}/recap`} target="_blank" rel="noreferrer" className={btn("outline", "sm", "border-white/20 bg-white/10 text-white hover:bg-white/20")}>
+                <Sparkles aria-hidden /> Recap
+              </a>
+              <LinkButton href={`${base}/settings`} variant="outline" size="sm" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+                <Pencil aria-hidden /> Edit
+              </LinkButton>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       {e.purged_at ? (
         <Notice tone="danger">The storage period ended on {formatDate(e.purged_at)} and the photos were deleted.</Notice>
       ) : soon ? (
         <Notice tone="warn">
           Photos will be deleted on <strong>{formatDate(e.deletion_at!)}</strong>. Download the album now, or{" "}
-          <Link href={`/dashboard/events/${e.id}/checkout`} className="font-semibold underline">
+          <Link href={`${base}/checkout`} className="font-semibold underline">
             add more storage days
           </Link>
           .
         </Notice>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="text-xs font-medium text-muted-foreground">Photos</div>
-          <div className="mt-1 text-2xl font-bold">{e.photo_count.toLocaleString("en-MY")}</div>
-          <div className="text-xs text-muted-foreground">of {lim.max_photos.toLocaleString("en-MY")}</div>
+      {/* Live numbers — the same ones guests see */}
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Tile icon={Camera} label="Photos" value={stats.photos.toLocaleString("en-MY")} sub={`of ${lim.max_photos.toLocaleString("en-MY")}`} tone="brand">
           <Meter value={e.photo_count} max={lim.max_photos} />
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="text-xs font-medium text-muted-foreground">Guests</div>
-          <div className="mt-1 text-2xl font-bold">{e.guest_count.toLocaleString("en-MY")}</div>
-          <div className="text-xs text-muted-foreground">of {lim.max_guests.toLocaleString("en-MY")}</div>
+        </Tile>
+        <Tile icon={Users} label="Guests joined" value={stats.joined.toLocaleString("en-MY")} sub={`of ${lim.max_guests.toLocaleString("en-MY")}`}>
           <Meter value={e.guest_count} max={lim.max_guests} />
-        </div>
-        <Stat label="Storage used" value={formatBytes(Number(e.bytes_used))} hint={`${lim.photos_per_guest} photos per guest`} />
-        <Stat label="Photos deleted on" value={e.deletion_at ? formatDate(e.deletion_at) : "—"} hint={`${lim.retention_days} days after the event`} />
-      </div>
+        </Tile>
+        <Tile icon={Images} label="Photographers" value={stats.guests.toLocaleString("en-MY")} sub="guests who shared" />
+        <Tile icon={Heart} label="Hearts" value={(totals?.hearts ?? 0).toLocaleString("en-MY")} sub={f.voting ? "on all photos" : "not in package"} tone="brand" />
+        <Tile icon={MessageCircleHeart} label="Wishes" value={stats.wishes.toLocaleString("en-MY")} sub={f.wishes ? "on the wall" : "not in package"} />
+        <Tile icon={MessageCircle} label="Comments" value={(totals?.comments ?? 0).toLocaleString("en-MY")} sub={f.comments ? "under photos" : "not in package"} />
+      </section>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <Card className="grid gap-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <QrCode className="size-5" aria-hidden /> Guest QR code
-            </h2>
-            {open ? <Badge tone="ok">Uploads open</Badge> : <Badge tone="neutral">Uploads closed</Badge>}
-          </div>
-          {!e.purged_at ? (
-            <>
-              <img src={`/api/events/${e.id}/qr?format=inline&v=${e.slug}`} alt="QR code for the guest page" className="mx-auto w-full max-w-60 rounded-xl border border-border bg-white" />
-              <div className="break-all rounded-xl bg-muted px-3 py-2 text-center font-mono text-sm">{url}</div>
-              <div className="flex flex-wrap justify-center gap-2">
-                <CopyButton text={url} />
-                <a href={`/api/events/${e.id}/qr`} className={btn("outline")}>
-                  <Download aria-hidden /> PNG
-                </a>
-                <LinkButton href={`/dashboard/events/${e.id}/qr`} variant="outline">
-                  <Printer aria-hidden /> Print card
-                </LinkButton>
-                <a href={url} target="_blank" rel="noreferrer" className={btn("outline")}>
-                  <ExternalLink aria-hidden /> Open
-                </a>
-                {e.cfg.features.slideshow ? (
-                  <a href={`${url}/slideshow`} target="_blank" rel="noreferrer" className={btn("outline")}>
-                    <Tv aria-hidden /> Slideshow
-                  </a>
-                ) : null}
-              </div>
-              <p className="text-center text-xs text-muted-foreground">
-                Guests can upload until {formatDateTime(uploadsCloseAt(e.ends_at, e.cfg))}.
-              </p>
-            </>
-          ) : null}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Leaderboard */}
+        <Card>
+          <SectionHead title="🏆 Top snappers" href={`${base}/guests`} link="All guests" />
+          {stats.topSnappers.length ? (
+            <ol className="grid gap-1.5">
+              {stats.topSnappers.slice(0, 5).map((s, i) => (
+                <li key={s.id}>
+                  <Link href={`${base}/photos?guest=${s.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted">
+                    <span className="w-6 text-center text-lg">{MEDALS[i] ?? <span className="text-sm font-bold text-muted-foreground">{i + 1}</span>}</span>
+                    <span className="grid size-8 place-items-center rounded-full bg-brand text-sm font-bold text-white">{initial(s.name)}</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold">{s.name ?? "Guest"}</span>
+                    <span className="text-sm text-muted-foreground">{s.count} 📸</span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">No photos yet.</p>
+          )}
         </Card>
 
-        <Card className="grid content-start gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Most loved */}
+        <Card>
+          <SectionHead title="❤️ Most loved" href={`${base}/photos?sort=top`} />
+          {stats.topPhotos.length ? (
+            <div className="grid grid-cols-3 gap-2">
+              {stats.topPhotos.slice(0, 6).map((p, i) => (
+                <a key={p.id} href={p.md} target="_blank" rel="noreferrer" className={`relative overflow-hidden rounded-xl bg-muted ${i === 0 ? "col-span-2 row-span-2" : ""}`}>
+                  <img src={i === 0 ? p.md : p.sm} alt={p.by ? `Photo by ${p.by}` : "Event photo"} loading="lazy" className="aspect-square size-full object-cover" />
+                  <span className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    <Heart className="size-3 fill-white" aria-hidden /> {p.votes}
+                  </span>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">{f.voting ? "Hearts show up here once guests start loving photos." : "Hearts aren't in this package."}</p>
+          )}
+        </Card>
+      </div>
+
+      {f.missions ? (
+        <Card>
+          <SectionHead title="🎯 Missions" href={`${base}/missions`} link="Manage" />
+          {missions.length ? (
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <ul className="grid gap-2">
+                {missions.map((m) => {
+                  const done = perMission.get(m.id) ?? 0;
+                  const pct = stats.joined ? Math.min(100, (done / stats.joined) * 100) : 0;
+                  return (
+                    <li key={m.id} className="rounded-xl bg-background px-3 py-2.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span>{m.emoji ?? "🎯"}</span>
+                        <span className="min-w-0 flex-1 truncate font-semibold">{m.title}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {done} done · {m.count} photo{m.count === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="rounded-2xl bg-gradient-to-br from-[#fff4e0] to-brand-soft p-4">
+                <h3 className="font-bold">Mission masters</h3>
+                <p className="text-xs text-muted-foreground">Completed every mission, fastest first.</p>
+                {board?.finishers.length ? (
+                  <ol className="mt-3 grid gap-1.5">
+                    {board.finishers.slice(0, 5).map((x, i) => (
+                      <li key={x.id} className="flex items-center gap-2 text-sm">
+                        <span className="w-6 text-center">{MEDALS[i] ?? i + 1}</span>
+                        <span className="min-w-0 flex-1 truncate font-semibold">{x.name ?? "Guest"}</span>
+                        <span className="text-xs text-muted-foreground">{new Date(x.at).toLocaleTimeString("en-MY", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" })}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">Nobody has finished them all yet.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
+              No missions yet.{" "}
+              <Link href={`${base}/missions`} className="font-semibold text-brand underline">
+                Add the wedding pack
+              </Link>{" "}
+              in one tap.
+            </p>
+          )}
+        </Card>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        {/* Latest photos */}
+        <Card>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-bold">Latest photos</h2>
             <div className="flex gap-2">
               {e.photo_count > 0 && !e.purged_at ? (
@@ -159,13 +283,13 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
                   <Download aria-hidden /> Download album
                 </a>
               ) : null}
-              <LinkButton href={`/dashboard/events/${e.id}/photos`} variant="outline" size="sm">
+              <LinkButton href={`${base}/photos`} variant="outline" size="sm">
                 Manage
               </LinkButton>
             </div>
           </div>
           {recent.photos.length ? (
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+            <div className="grid grid-cols-4 gap-1.5">
               {recent.photos.map((p) => (
                 <img key={p.id} src={p.sm} alt="" loading="lazy" className="aspect-square w-full rounded-lg bg-muted object-cover" />
               ))}
@@ -174,25 +298,86 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
             <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">No photos yet. Share the QR code and they&apos;ll show up here.</p>
           )}
         </Card>
+
+        {/* QR */}
+        <Card className="grid content-start gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <QrCode className="size-5" aria-hidden /> Guest QR code
+            </h2>
+            <Link href={`${base}/qr`} className="text-sm font-semibold text-brand">
+              Print card
+            </Link>
+          </div>
+          {!e.purged_at ? (
+            <>
+              <img src={`/api/events/${e.id}/qr?format=inline&v=${e.slug}`} alt="QR code for the guest page" className="mx-auto w-full max-w-44 rounded-xl border border-border bg-white" />
+              <div className="break-all rounded-xl bg-muted px-3 py-2 text-center font-mono text-sm">{url}</div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <CopyButton text={url} />
+                <a href={`/api/events/${e.id}/qr`} className={btn("outline")}>
+                  <Download aria-hidden /> PNG
+                </a>
+              </div>
+              <p className="text-center text-xs text-muted-foreground">Guests can upload until {formatDateTime(uploadsCloseAt(e.ends_at, e.cfg))}.</p>
+            </>
+          ) : null}
+        </Card>
       </div>
 
+      {wishes.length || comments.length ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {f.wishes ? (
+            <Card>
+              <SectionHead title="💌 Latest wishes" href={`${base}/wishes`} />
+              {wishes.length ? (
+                <ul className="grid gap-2">
+                  {wishes.map((w) => (
+                    <li key={w.id} className="rounded-xl bg-background p-3">
+                      <p className="line-clamp-3 font-script text-xl leading-snug">{w.message}</p>
+                      <div className="mt-1 text-xs font-semibold text-brand">— {w.name ?? "A guest"}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No wishes yet.</p>
+              )}
+            </Card>
+          ) : null}
+          {f.comments ? (
+            <Card>
+              <SectionHead title="💬 Latest comments" href={`${base}/comments`} />
+              {comments.length ? (
+                <ul className="grid gap-2">
+                  {comments.map((c) => (
+                    <li key={c.id} className="rounded-xl bg-background p-3 text-sm">
+                      <strong>{c.name ?? "Guest"}</strong> {c.body}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No comments yet.</p>
+              )}
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="grid content-start gap-3">
+        <Card className="grid content-start gap-2">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold">{snap.name} package</h2>
+            <h2 className="text-lg font-bold">{e.plan_snapshot!.name} package</h2>
             {!e.purged_at ? (
-              <LinkButton href={`/dashboard/events/${e.id}/checkout`} variant="outline" size="sm">
-                Upgrade or add more
+              <LinkButton href={`${base}/checkout`} variant="outline" size="sm">
+                Upgrade
               </LinkButton>
             ) : null}
           </div>
-          <ul className="grid gap-1.5 text-sm text-muted-foreground">
-            {planLines({ limits: e.cfg.limits, features: e.cfg.features, quality: e.cfg.quality, highlights: [] }).map((l) => (
-              <li key={l}>• {l}</li>
-            ))}
-          </ul>
+          <p className="text-sm text-muted-foreground">
+            {formatBytes(Number(e.bytes_used))} stored · {lim.photos_per_guest} photos per guest · deleted on {e.deletion_at ? formatDate(e.deletion_at) : "—"} ({lim.retention_days} days after the event)
+          </p>
         </Card>
-        <Card className="grid content-start gap-3">
+        <Card className="grid content-start gap-2">
           <h2 className="text-lg font-bold">Payments</h2>
           <ul className="divide-y divide-border text-sm">
             {purchases.map((p) => (

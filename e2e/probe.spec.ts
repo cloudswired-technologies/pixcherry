@@ -1,4 +1,5 @@
 import { test } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { readFileSync } from "node:fs";
 import pg from "pg";
 
@@ -6,6 +7,7 @@ import pg from "pg";
 test.skip(!process.env.PROBE, "set PROBE=1");
 
 test("probe camera polaroid", async ({ browser }) => {
+  distinctPhones(browser);
   const DB = readFileSync(".env.local", "utf8").match(/^DATABASE_URL=(.*)$/m)![1].trim();
   const c = new pg.Client({ connectionString: DB });
   await c.connect();

@@ -26,6 +26,7 @@ export type EventRow = {
   uploads_enabled: boolean;
   require_approval: boolean;
   camera_only: boolean;
+  one_phone_one_roll: boolean;
   plan_id: string | null;
   plan_snapshot: PlanSnapshot | null;
   addon_totals: Partial<Record<AddonKind, number>>;

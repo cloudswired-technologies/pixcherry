@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
@@ -62,6 +63,7 @@ async function guestPage(browser: Browser, url: string) {
 }
 
 test("organiser → guest upload → gallery → downloads → admin → retention", async ({ page, browser, request }) => {
+  distinctPhones(browser);
   const { files, bad } = await fixtures();
   const email = `org-${Date.now()}@example.com`;
   await sql("insert into promo_codes (code, percent_off) values ('E2EFREE', 100) on conflict (code) do update set is_active = true, used_count = 0");
@@ -133,6 +135,7 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   // --- organiser deletes one photo
   await page.goto(`/dashboard/events/${ev.id}/photos`);
   await page.getByRole("button", { name: "Delete photo" }).first().click();
+  await page.getByRole("alertdialog", { name: "Delete this photo?" }).getByRole("button", { name: "Delete photo" }).click();
   await expect(page.getByRole("button", { name: "Delete photo" })).toHaveCount(2);
   const [after] = await sql("select photo_count from events where id = $1", [ev.id]);
   expect(after.photo_count).toBe(2);

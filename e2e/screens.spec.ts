@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { mkdirSync, readFileSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
@@ -21,6 +22,7 @@ async function sql(text: string, params: unknown[] = []) {
 }
 
 test("screens", async ({ browser }) => {
+  distinctPhones(browser);
   mkdirSync(OUT, { recursive: true });
   mkdirSync("e2e/.fixtures/shots", { recursive: true });
   const colours = ["#e8553d", "#3d8be8", "#3de88b", "#d49b2e", "#6f63b8", "#c45a7a", "#5f8f7d", "#8c6b4f", "#4d7fb3"];

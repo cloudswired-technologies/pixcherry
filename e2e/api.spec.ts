@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { readFileSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
@@ -39,6 +40,7 @@ async function reserve(request: APIRequestContext, slug: string, files: { type: 
 }
 
 test("API rejects bad uploads and frees quota", async ({ browser, request }) => {
+  distinctPhones(browser);
   const ev = await makeEvent();
 
   // Not joined → 401

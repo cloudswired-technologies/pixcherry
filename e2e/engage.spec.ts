@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { readFileSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
@@ -21,6 +22,7 @@ async function sql(text: string, params: unknown[] = []) {
 }
 
 test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, page }) => {
+  distinctPhones(browser);
   // Organiser + paid Basic event with missions switched on for this event (admin override).
   const email = `eng-${Date.now()}@example.com`;
   const [u] = await sql("insert into users (email) values ($1) returning id", [email]);
@@ -131,8 +133,8 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g2.getByText("Congratulations Aina & Hakim! Bahagia selalu ❤️")).toBeVisible();
   await expect(g2.getByText("— Nora")).toBeVisible();
 
-  // Organiser sees and can hide the wish.
-  await page.reload();
+  // Organiser sees the wish on the Wishes page.
+  await page.goto(`/dashboard/events/${ev.id}/wishes`);
   await expect(page.getByText("Congratulations Aina & Hakim!")).toBeVisible();
 
   // Slideshow shows the ticker.

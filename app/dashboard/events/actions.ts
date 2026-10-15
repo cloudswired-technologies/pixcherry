@@ -17,6 +17,7 @@ import { audit } from "@/lib/settings";
 import { deleteObject, deletePrefix, putObject } from "@/lib/storage";
 import { purgeEvent } from "@/lib/jobs";
 import { deleteComment } from "@/lib/comments";
+import { mergeGuests, removeGuest } from "@/lib/guest-admin";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -94,7 +95,7 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
     }
     await q(
       `update events set name = $2, description = $3, starts_at = $4, ends_at = $5, ask_guest_name = $6, uploads_enabled = $7,
-         require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, thank_you = $12, suggested_tags = $13, updated_at = now() where id = $1`,
+         require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, thank_you = $12, suggested_tags = $13, one_phone_one_roll = $14, updated_at = now() where id = $1`,
       [
         e.id,
         d.name,
@@ -109,13 +110,14 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         d.venue,
         d.thankYou,
         d.tags,
+        fd.get("one_phone_one_roll") === "on",
       ],
       c,
     );
     await refreshDeletion(e.id, c);
     await audit(user.id, "event.update", e.id, { name: d.name }, c);
   });
-  revalidatePath(`/dashboard/events/${e.id}`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
   return { ok: "Saved." };
 }
 
@@ -144,7 +146,7 @@ export async function uploadCover(id: string, _: FormState, fd: FormData): Promi
   } catch (err) {
     return { error: err instanceof InputError ? err.message : "That file isn't an image we can use." };
   }
-  revalidatePath(`/dashboard/events/${e.id}`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
   return { ok: "Cover updated." };
 }
 
@@ -166,7 +168,7 @@ export async function uploadLogo(id: string, _: FormState, fd: FormData): Promis
   } catch (err) {
     return { error: err instanceof InputError ? err.message : "That file isn't an image we can use." };
   }
-  revalidatePath(`/dashboard/events/${e.id}`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
   return { ok: "Logo updated." };
 }
 
@@ -176,31 +178,50 @@ export async function regenerateLink(id: string) {
   // A fresh private link: old links (and their redirects) stop working.
   await q("update events set slug = $2, old_slugs = '{}', updated_at = now() where id = $1", [e.id, slug]);
   await audit(user.id, "event.new_link", e.id);
-  revalidatePath(`/dashboard/events/${e.id}`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function setUploads(id: string, enabled: boolean) {
   const { e } = await managed(id);
   await q("update events set uploads_enabled = $2, updated_at = now() where id = $1", [e.id, enabled]);
-  revalidatePath(`/dashboard/events/${e.id}`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function removePhoto(id: string, photoId: string) {
   const { user, e } = await managed(id);
   if (await deletePhoto(e.id, photoId)) await audit(user.id, "photo.delete", e.id, { photo: photoId });
-  revalidatePath(`/dashboard/events/${e.id}/photos`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function approve(id: string, photoIds: string[]) {
   const { e } = await managed(id);
   await approvePhotos(e.id, photoIds.filter((p) => /^[0-9a-f-]{36}$/.test(p)).slice(0, 500));
-  revalidatePath(`/dashboard/events/${e.id}/photos`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function blockGuest(id: string, guestId: string, blocked: boolean) {
   const { e } = await managed(id);
   await q("update guests set is_blocked = $3 where id = $2 and event_id = $1", [e.id, guestId, blocked]);
-  revalidatePath(`/dashboard/events/${e.id}/photos`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
+}
+
+export async function removeGuestNow(id: string, guestId: string) {
+  const { user, e } = await managed(id);
+  if (await removeGuest(e.id, guestId)) await audit(user.id, "guest.remove", e.id, { guest: guestId });
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
+}
+
+export async function mergeGuestsNow(id: string, fromId: string, intoId: string) {
+  const { user, e } = await managed(id);
+  if (await mergeGuests(e.id, fromId, intoId)) await audit(user.id, "guest.merge", e.id, { from: fromId, into: intoId });
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
+}
+
+/** Organiser marks a flagged guest as a different person after all. */
+export async function notSamePhone(id: string, guestId: string) {
+  const { e } = await managed(id);
+  await q("update guests set same_phone_as = null where id = $2 and event_id = $1", [e.id, guestId]);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function deleteDraft(id: string) {
@@ -249,7 +270,7 @@ export async function addMission(id: string, _: FormState, fd: FormData): Promis
   if ((n?.n ?? 0) >= 30) return { error: "That's plenty of missions (30 max)." };
   await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, title, cleanEmoji(fd.get("emoji")), (n?.max ?? 0) + 1]);
   await audit(user.id, "mission.add", e.id, { title });
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
   return { ok: "Mission added." };
 }
 
@@ -262,14 +283,14 @@ export async function addPresetMissions(id: string) {
     if (existing.has(m.title)) continue;
     await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, m.title, m.emoji, ++sort]);
   }
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function deleteMission(id: string, missionId: string) {
   const { user, e } = await managed(id);
   await q("delete from event_missions where id = $2 and event_id = $1", [e.id, missionId]);
   await audit(user.id, "mission.delete", e.id, { mission: missionId });
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function moveMission(id: string, missionId: string, dir: -1 | 1) {
@@ -282,20 +303,20 @@ export async function moveMission(id: string, missionId: string, dir: -1 | 1) {
     [list[i], list[j]] = [list[j], list[i]];
     for (const [k, m] of list.entries()) await q("update event_missions set sort = $2 where id = $1", [m.id, k + 1], c);
   });
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function toggleWish(id: string, wishId: string, hidden: boolean) {
   const { user, e } = await managed(id);
   await setWishHidden(e.id, wishId, hidden);
   await audit(user.id, hidden ? "wish.hide" : "wish.show", e.id, { wish: wishId });
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 export async function removeComment(id: string, commentId: string) {
   const { user, e } = await managed(id);
   if (await deleteComment(e.id, commentId, null)) await audit(user.id, "comment.delete", e.id, { comment: commentId });
-  revalidatePath(`/dashboard/events/${e.id}/engage`);
+  revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 
 // ------------------------------------------------------------------ delete

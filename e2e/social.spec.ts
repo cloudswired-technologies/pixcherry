@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { asPhone, distinctPhones } from "./phones";
 import { readFileSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
@@ -42,6 +43,7 @@ async function login(page: Page, email: string) {
 const jpeg = (color: string) => sharp({ create: { width: 900, height: 1200, channels: 3, background: color } }).jpeg().toBuffer();
 
 test("links, comments, missions, top snappers, camera roll, install", async ({ browser, page }) => {
+  distinctPhones(browser);
   test.setTimeout(300_000);
   const tag = Date.now().toString(36);
   const email = `social-${tag}@example.com`;
@@ -86,6 +88,7 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
 
   // ---------------------------------------------------------------- guest 1: old link, find page, join, You chip
   const c1 = await browser.newContext({ ...PHONE, permissions: ["camera"] });
+  await asPhone(c1, 4242); // the same "phone" comes back later in another browser
   const g1 = await c1.newPage();
   await g1.goto(`/e/${wanted}`);
   await expect(g1).toHaveURL(new RegExp(`/e/${slug}$`));
@@ -175,9 +178,10 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   expect(cm.n).toBe(2);
 
   // Organiser removes one from the dashboard.
-  await page.goto(`/dashboard/events/${ev.id}/engage`);
+  await page.goto(`/dashboard/events/${ev.id}/comments`);
   await expect(page.getByText("Cantiknya!")).toBeVisible();
-  await page.locator("li", { hasText: "Cantiknya!" }).getByRole("button", { name: "Delete" }).click();
+  await page.locator("li", { hasText: "Cantiknya!" }).getByRole("button", { name: "Delete comment" }).click();
+  await page.getByRole("alertdialog", { name: "Delete this comment?" }).getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText("Cantiknya!")).toHaveCount(0);
   const [cnt] = await sql("select sum(comment_count)::int n from photos where event_id = $1", [ev.id]);
   expect(cnt.n).toBe(1);
@@ -241,5 +245,55 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await expect(g6.getByRole("button", { name: "You: Nora" })).toBeVisible();
   expect(await sql("select id from guests where event_id = $1 and name = 'Nora'", [ev.id])).toHaveLength(2);
 
-  for (const c of [c1, c2, c3, c4, c5, c6]) await c.close();
+  // ---------------------------------------------------------------- one phone, one roll (device + network)
+  // Siti's phone in yet another browser, typing a different name: strict mode keeps her roll.
+  const c7 = await browser.newContext(PHONE);
+  await asPhone(c7, 4242);
+  const g7 = await c7.newPage();
+  await seenInstall(g7, slug);
+  await g7.goto(`/e/${slug}`);
+  await g7.getByRole("button", { name: "Join", exact: true }).click();
+  await g7.getByLabel("Your name").fill("Ali");
+  await g7.getByRole("button", { name: /Let's go/ }).click();
+  const strict = g7.getByRole("group", { name: "Welcome back" });
+  await expect(strict).toContainText("This phone is already in the album as Siti Aminah");
+  await expect(strict.getByRole("button", { name: "No, I'm someone else" })).toHaveCount(0);
+  await strict.getByRole("button", { name: "Continue as Siti Aminah" }).click();
+  await expect(g7.getByRole("button", { name: "You: Siti Aminah" })).toBeVisible();
+  // Organiser turned strict off: "someone else" is allowed but flagged for review.
+  await sql("update events set one_phone_one_roll = false where id = $1", [ev.id]);
+  const c8 = await browser.newContext(PHONE);
+  await asPhone(c8, 4242);
+  const g8 = await c8.newPage();
+  await seenInstall(g8, slug);
+  await g8.goto(`/e/${slug}`);
+  await g8.getByRole("button", { name: "Join", exact: true }).click();
+  await g8.getByLabel("Your name").fill("Ali");
+  await g8.getByRole("button", { name: /Let's go/ }).click();
+  await g8.getByRole("group", { name: "Welcome back" }).getByRole("button", { name: "No, I'm someone else" }).click();
+  await expect(g8.getByRole("button", { name: "You: Ali" })).toBeVisible();
+  const [ali] = await sql("select g.same_phone_as = s.id as flagged from guests g, guests s where g.event_id = $1 and g.name = 'Ali' and s.event_id = $1 and s.name = 'Siti Aminah'", [ev.id]);
+  expect(ali.flagged).toBe(true);
+
+  // ---------------------------------------------------------------- organiser dashboard
+  await page.goto(`/dashboard/events/${ev.id}`);
+  await expect(page.getByRole("heading", { name: "🏆 Top snappers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mission masters" })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Siti Aminah").first()).toBeVisible();
+  // Guests: the flagged same-phone guest is merged into Siti; one Nora is removed.
+  await page.goto(`/dashboard/events/${ev.id}/guests`);
+  await expect(page.getByText("Possibly the same phone (1)")).toBeVisible();
+  await page.getByRole("button", { name: "Merge" }).click();
+  await page.getByRole("alertdialog", { name: "Merge into Siti Aminah?" }).getByRole("button", { name: "Merge" }).click();
+  await expect(page.getByText("Possibly the same phone")).toHaveCount(0);
+  expect(await sql("select id from guests where event_id = $1 and name = 'Ali'", [ev.id])).toHaveLength(0);
+  await page.getByRole("button", { name: "Remove Nora" }).first().click();
+  await page.getByRole("alertdialog", { name: "Remove Nora?" }).getByRole("button", { name: "Remove guest" }).click();
+  await expect(page.getByRole("button", { name: "Remove Nora" })).toHaveCount(1);
+  // Photos: most loved sort and a guest filter.
+  await page.goto(`/dashboard/events/${ev.id}/photos?sort=top`);
+  await expect(page.getByRole("link", { name: "Most loved" })).toHaveClass(/bg-ink/);
+  await expect(page.getByAltText("Photo by Siti Aminah").first()).toBeVisible();
+
+  for (const c of [c1, c2, c3, c4, c5, c6, c7, c8]) await c.close();
 });

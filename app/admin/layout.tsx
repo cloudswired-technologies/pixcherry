@@ -1,29 +1,24 @@
-import Link from "next/link";
-import { Logo } from "@/components/ui";
+import { DashShell, type NavItem } from "@/components/dash-shell";
 import { requireAdmin } from "@/lib/auth";
-import { AdminNav } from "./admin-nav";
 
 export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" } };
 
+const NAV: NavItem[] = [
+  { href: "/admin", label: "Overview", icon: "gauge", exact: true },
+  { href: "/admin/events", label: "Events", icon: "events" },
+  { href: "/admin/plans", label: "Packages", icon: "plans" },
+  { href: "/admin/quality", label: "Photo quality", icon: "quality" },
+  { href: "/admin/addons", label: "Add-ons", icon: "addons" },
+  { href: "/admin/promos", label: "Promo codes", icon: "promos" },
+  { href: "/admin/settings", label: "Settings", icon: "settings" },
+  { href: "/admin/logs", label: "Logs", icon: "logs" },
+];
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
+  const user = await requireAdmin();
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-border bg-ink text-white">
-        <div className="container-page flex h-14 items-center justify-between gap-3">
-          <Link href="/admin" className="flex items-center gap-2">
-            <Logo light />
-            <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">Admin</span>
-          </Link>
-          <Link href="/dashboard" className="text-sm text-white/80 hover:text-white">
-            My events
-          </Link>
-        </div>
-      </header>
-      <div className="container-page grid gap-6 py-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <AdminNav />
-        <main className="min-w-0">{children}</main>
-      </div>
-    </div>
+    <DashShell user={{ email: user.email, isAdmin: true }} admin={NAV}>
+      {children}
+    </DashShell>
   );
 }

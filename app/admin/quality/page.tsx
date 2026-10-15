@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/action-form";
+import { Confirm } from "@/components/confirm";
 import { Card, Field, Input, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { q } from "@/lib/db";
@@ -42,9 +43,9 @@ export default async function Quality() {
             <PresetFields p={p} />
           </ActionForm>
           {!used.has(p.id) ? (
-            <form action={deletePreset.bind(null, p.id)}>
-              <button className="text-sm text-danger underline">Delete (not used by any package)</button>
-            </form>
+            <Confirm action={deletePreset.bind(null, p.id)} title={`Delete “${p.name}”?`} message="No package uses it, so nothing else changes." confirm="Delete" className="justify-self-start text-sm text-danger underline">
+              Delete (not used by any package)
+            </Confirm>
           ) : null}
         </Card>
       ))}

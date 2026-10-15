@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { distinctPhones } from "./phones";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
@@ -52,6 +53,7 @@ async function shot(page: Page, name: string, opts: { full?: boolean; bar?: bool
 }
 
 test("A to Z on a phone", async ({ browser }) => {
+  distinctPhones(browser);
   test.setTimeout(600_000);
   mkdirSync(OUT, { recursive: true });
   const photos: Buffer[] = [];

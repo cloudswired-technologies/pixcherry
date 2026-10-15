@@ -64,6 +64,12 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
             disabled={!f.moderation}
           />
           <Toggle
+            name="one_phone_one_roll"
+            label="One phone, one roll"
+            help="A phone that already joined (even from another browser) continues as the same guest, with the same shots left. Turn off if many guests share one phone model on the same Wi-Fi and get mixed up — repeats are then only flagged in Guests."
+            defaultChecked={e.one_phone_one_roll}
+          />
+          <Toggle
             name="camera_only"
             label="Disposable camera only"
             help={f.camera ? "Guests can only snap with the PixCherry camera (film filters, shots-left counter) — no uploads from the phone gallery." : "Available on a higher package."}

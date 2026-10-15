@@ -1,7 +1,7 @@
 "use server";
 
 import { getEventBySlug } from "@/lib/events";
-import { cleanName, continueAsGuest, currentGuest, currentGuestKey, joinEvent, renameGuest, sameNameNearby } from "@/lib/guests";
+import { cleanName, continueAsGuest, currentGuest, currentGuestKey, findSamePhone, joinEvent, renameGuest } from "@/lib/guests";
 import { uploadsOpen } from "@/lib/limits";
 import { rateLimit } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
@@ -9,8 +9,11 @@ import { verifyTurnstile } from "@/lib/turnstile";
 export type JoinState = {
   error?: string;
   joined?: { id: string; name: string | null; uploaded: number; key: string | null };
-  /** Same name, same phone/network as an earlier guest: ask "is this you?" before making a new one. */
-  match?: { id: string; name: string; photos: number };
+  /**
+   * Looks like an earlier guest on another browser of this phone: ask "is this you?".
+   * strict = same phone (device + network) and the event allows one roll per phone, so no "someone else".
+   */
+  match?: { id: string; name: string | null; photos: number; byDevice: boolean; strict: boolean };
 };
 
 export async function join(slug: string, _: JoinState, fd: FormData): Promise<JoinState> {
@@ -21,16 +24,23 @@ export async function join(slug: string, _: JoinState, fd: FormData): Promise<Jo
   // A whole venue may share one IP, so this cap is loose; Turnstile stops scripts.
   if (!(await rateLimit("join", 300, 10 * 60_000))) return { error: "Lots of people are joining right now. Please try again in a minute." };
   const name = e.ask_guest_name ? cleanName(fd.get("name")) : null;
+  const raw = String(fd.get("device") ?? "");
+  const device = /^[0-9a-f]{32}$/.test(raw) ? raw : null;
   // "same" = "" (not asked yet) | "yes:<guest id>" | "new".
   const same = String(fd.get("same") ?? "");
-  const match = name && same !== "new" ? await sameNameNearby(e.id, name) : null;
+  // Several signals together: same network + (same phone signature or same name).
+  const found = await findSamePhone(e.id, name, device);
+  if (found?.blocked && found.byDevice) return { error: "The hosts turned off uploads from this phone." };
+  const match = found && !found.blocked ? { id: found.id, name: found.name, photos: found.photos, byDevice: found.byDevice, strict: found.byDevice && e.one_phone_one_roll } : null;
   if (match && !same) return { match }; // the bot-check token is only spent on the final submit
+  if (match?.strict && same !== `yes:${match.id}`) return { match, error: "This phone already has a roll in this album." };
   if (!(await verifyTurnstile(String(fd.get("cf-turnstile-response") ?? "")))) return { error: "Please complete the check and try again." };
   if (match && same === `yes:${match.id}`) {
     const r = await continueAsGuest(e.id, match.id);
     if (r) return { joined: { id: r.guest.id, name: r.guest.name, uploaded: r.guest.upload_count, key: r.key } };
   }
-  const r = await joinEvent(e, name);
+  // "Someone else" on a matching phone is allowed (not strict) but flagged for the organiser.
+  const r = await joinEvent(e, name, device, found?.byDevice ? found.id : null);
   if (!r.ok) return { error: r.error };
   return { joined: { id: r.guest.id, name: r.guest.name, uploaded: 0, key: r.key } };
 }

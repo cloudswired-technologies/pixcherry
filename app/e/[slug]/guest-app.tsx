@@ -30,10 +30,12 @@ import { Turnstile } from "@/components/turnstile";
 import type { Quality } from "@/lib/client/compress";
 import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
+import { deviceSignature } from "@/lib/client/device";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
 import { DisposableCamera } from "./camera";
+import { BestMoments, Stories, type Moment } from "./highlights";
 import { InstallGuide, useInstall } from "./install";
 import {
   AlbumCard,
@@ -41,7 +43,6 @@ import {
   Masonry,
   MissionsProgress,
   PeopleGrid,
-  PeopleRow,
   Sheet,
   UploadReview,
   WishForm,
@@ -123,7 +124,8 @@ export function GuestApp(p: Props) {
   const [tab, setTab] = useState<Tab>(p.features.tags || (p.features.missions && p.missions.length) ? "highlights" : "all");
   const [album, setAlbum] = useState<Album>(null);
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
-  const [open, setOpen] = useState<{ list: "all" | "album"; i: number } | null>(null);
+  // The viewer follows a photo id: new photos arriving at the top must not shift what's on screen.
+  const [open, setOpen] = useState<{ list: "all" | "album"; id: string } | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [mission, setMission] = useState<string | null>(null);
   const [joinFor, setJoinFor] = useState<Pending>(null);
@@ -156,9 +158,12 @@ export function GuestApp(p: Props) {
   const master = hasMissions && stats.missions.every((m) => done.has(m.id));
   const install = useInstall();
 
+  // One toast at a time; a new one restarts the timer (an older timer mustn't hide it early).
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flash = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
   const loadStats = useCallback(async () => {
@@ -383,6 +388,7 @@ export function GuestApp(p: Props) {
 
   const shotsLeft = up.available;
   const viewerList = open?.list === "album" ? albumGallery.photos : all.photos;
+  const viewerAt = open ? viewerList.findIndex((x) => x.id === open.id) : -1;
   const busy = up.items.filter((i) => i.status !== "done" && i.status !== "error").length;
   const failed = up.items.filter((i) => i.status === "error");
   const tabs: { id: Tab; label: string; show: boolean }[] = [
@@ -402,6 +408,12 @@ export function GuestApp(p: Props) {
       ? stats.missions.filter((m) => m.count).map((m) => ({ k: `m:${m.id}`, title: m.title, emoji: m.emoji ?? "🎯", sub: `${m.count} photo${m.count === 1 ? "" : "s"}`, cover: m.cover ?? null }))
       : []),
   ];
+  // Best moments: the most loved photos, or the newest ones before anyone hearts.
+  const moments: Moment[] =
+    f.voting && stats.topPhotos.length
+      ? stats.topPhotos.map((t) => ({ id: t.id, src: t.md, by: t.by, votes: t.votes }))
+      : all.photos.filter((x) => x.status === "ready").slice(0, 6).map((x) => ({ id: x.id, src: x.md, by: x.by, votes: x.votes }));
+  const openMoment = (id: string) => (all.photos.some((x) => x.id === id) ? setOpen({ list: "all", id }) : openTop());
   const openTile = (k: string) => {
     if (k === "top") return openTop();
     if (k.startsWith("t:")) return openTag(k.slice(2));
@@ -556,7 +568,7 @@ export function GuestApp(p: Props) {
                 ))}
               </div>
             ) : null}
-            <Masonry gallery={albumGallery} missions={missionMap} onOpen={(i) => setOpen({ list: "album", i })} empty="Nothing here yet." />
+            <Masonry gallery={albumGallery} missions={missionMap} onOpen={(i) => setOpen({ list: "album", id: albumGallery.photos[i].id })} empty="Nothing here yet." />
           </section>
         ) : tab === "highlights" ? (
           <div className="grid gap-4 px-2">
@@ -570,10 +582,12 @@ export function GuestApp(p: Props) {
                 <ArrowRight className="size-5 shrink-0" aria-hidden />
               </Link>
             ) : null}
+            <Stories people={people ?? []} me={joined?.id ?? null} onOpen={openPerson} onAdd={canShoot && !(joined && shotsLeft <= 0) ? () => start(f.camera ? "camera" : "upload") : null} />
+            <BestMoments title={f.voting && stats.topPhotos.length ? "Best moments" : "Fresh moments"} moments={moments} onOpen={openMoment} onAll={() => (f.voting && stats.topPhotos.length ? openTop() : goTab("all"))} />
             {hasMissions ? <MissionsProgress missions={stats.missions} done={done} canShoot={canShoot} onPick={snapMission} onAll={() => goTab("missions")} /> : null}
             {albums.length ? (
               <section>
-                <h3 className="mb-3 px-1 font-bold">Albums</h3>
+                <h3 className="mb-2.5 px-1 text-lg font-extrabold">Albums</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {albums.map((a) => (
                     <AlbumCard key={a.k} title={a.title} emoji={a.emoji} subtitle={a.sub} cover={a.cover} onClick={() => openTile(a.k)} />
@@ -590,25 +604,20 @@ export function GuestApp(p: Props) {
                 </p>
               </section>
             ) : null}
-            {people?.length ? (
-              <section className="rounded-3xl bg-white p-4 shadow-soft">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-bold">Browse by people</h3>
-                  <button type="button" onClick={() => goTab("people")} className="text-sm font-semibold text-brand">
-                    See all
-                  </button>
-                </div>
-                <PeopleRow people={people} onOpen={openPerson} />
-              </section>
-            ) : null}
             <section>
               <div className="mb-3 flex items-center justify-between px-1">
-                <h3 className="font-bold">Latest moments</h3>
+                <h3 className="inline-flex items-center gap-2 text-lg font-extrabold">
+                  <span className="relative flex size-2.5">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand opacity-60" />
+                    <span className="relative inline-flex size-2.5 rounded-full bg-brand" />
+                  </span>
+                  Live feed
+                </h3>
                 <button type="button" onClick={() => goTab("all")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand">
                   All photos <ArrowRight className="size-4" aria-hidden />
                 </button>
               </div>
-              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} pending={pending} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
+              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} pending={pending} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
             </section>
           </div>
         ) : tab === "missions" && hasMissions ? (
@@ -648,7 +657,7 @@ export function GuestApp(p: Props) {
                 </select>
               </label>
             </div>
-            <Masonry gallery={all} pending={order === "new" ? pending : undefined} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
+            <Masonry gallery={all} pending={order === "new" ? pending : undefined} missions={missionMap} onOpen={(i) => setOpen({ list: "all", id: all.photos[i].id })} empty="No photos yet — be the first to snap one!" />
           </section>
         )}
       </main>
@@ -783,7 +792,7 @@ export function GuestApp(p: Props) {
 
       {toast ? (
         <div className="fixed inset-x-0 bottom-28 z-[80] flex justify-center px-4" role="status">
-          <div className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lift [animation:pc-pop_3.5s_ease_forwards]">{toast}</div>
+          <div key={toast} className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lift [animation:pc-pop_3.5s_ease_forwards]">{toast}</div>
         </div>
       ) : null}
 
@@ -849,14 +858,14 @@ export function GuestApp(p: Props) {
         />
       </Sheet>
 
-      {open !== null ? (
+      {open !== null && viewerAt >= 0 ? (
         <Viewer
           slug={p.slug}
           photos={viewerList}
-          index={open.i}
+          index={viewerAt}
           total={open.list === "all" ? stats.photos : undefined}
           onIndex={(i) => {
-            setOpen({ ...open, i });
+            setOpen({ ...open, id: viewerList[i].id });
             if (i >= viewerList.length - 3) (open.list === "album" ? albumGallery : all).more();
           }}
           onClose={() => setOpen(null)}
@@ -921,7 +930,11 @@ function JoinForm({
   const [widget, setWidget] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<JoinState["match"] | null>(null);
+  const [device, setDevice] = useState("");
   const [busy, startBusy] = useTransition();
+  useEffect(() => {
+    deviceSignature().then(setDevice);
+  }, []);
   useEffect(() => {
     if (!siteKey) return;
     // If the check never finishes (blocked script), let them try anyway; the server decides.
@@ -939,7 +952,8 @@ function JoinForm({
     startBusy(async () => {
       const r = await join(slug, {}, fd);
       if (r.joined) return onJoined(r.joined);
-      if (r.match) return setMatch(r.match);
+      if (r.match && !r.error) return setMatch(r.match);
+      if (r.match) setMatch(r.match);
       setError(r.error ?? "Something went wrong. Please try again.");
       if (siteKey) {
         // Tokens are single use: get a fresh one for the next try.
@@ -970,18 +984,31 @@ function JoinForm({
       ) : null}
       {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} onInteractive={() => setTick(true)} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
-      {match && match.name.toLowerCase() === name.trim().toLowerCase() ? (
+      <input type="hidden" name="device" value={device} />
+      {match && (match.byDevice || (match.name ?? "").toLowerCase() === name.trim().toLowerCase()) ? (
         <div className="grid gap-2 rounded-2xl bg-brand-soft p-4" role="group" aria-label="Welcome back">
-          <p className="text-sm">
-            <strong>Welcome back, {match.name}! 👋</strong> Someone called {match.name} already joined from this phone{match.photos ? ` with ${match.photos} photo${match.photos === 1 ? "" : "s"}` : ""}. Is that you?
-          </p>
+          {match.strict ? (
+            <p className="text-sm">
+              <strong>📱 This phone is already in the album as {match.name ?? "a guest"}</strong>
+              {match.photos ? ` (${match.photos} photo${match.photos === 1 ? "" : "s"})` : ""}. One phone, one roll — carry on where you left off.
+            </p>
+          ) : (
+            <p className="text-sm">
+              <strong>Welcome back{match.name ? `, ${match.name}` : ""}! 👋</strong> {match.byDevice ? "This phone already joined" : `Someone called ${match.name} already joined from this phone`}
+              {match.photos ? ` with ${match.photos} photo${match.photos === 1 ? "" : "s"}` : ""}. Is that you?
+            </p>
+          )}
           <button name="same" value={`yes:${match.id}`} disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-white shadow-cherry disabled:opacity-60">
             {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
-            Yes, continue as {match.name}
+            {match.strict ? "Continue" : "Yes, continue"} as {match.name ?? "that guest"}
           </button>
-          <button name="same" value="new" disabled={busy || waiting} className="py-1.5 text-sm font-semibold text-muted-foreground">
-            No, I&apos;m someone else
-          </button>
+          {match.strict ? (
+            <p className="text-xs text-muted-foreground">Not you? Someone with the same phone model on the same Wi-Fi can switch to mobile data and try again, or ask the hosts.</p>
+          ) : (
+            <button name="same" value="new" disabled={busy || waiting} className="py-1.5 text-sm font-semibold text-muted-foreground">
+              No, I&apos;m someone else
+            </button>
+          )}
         </div>
       ) : (
         <button disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">

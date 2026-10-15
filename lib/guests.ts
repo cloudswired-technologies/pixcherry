@@ -54,16 +54,19 @@ async function setGuestCookie(eventId: string, value: string) {
 
 export type JoinResult = { ok: true; guest: Guest; key: string } | { ok: false; error: string };
 
+const ipHash = async () => sha256(`ip:${await clientIp()}`).slice(0, 16);
+
 /** Creates the guest (respecting the event's guest limit) and sets the cookie. */
-export async function joinEvent(e: EventWithConfig, name: string | null): Promise<JoinResult> {
+export async function joinEvent(e: EventWithConfig, name: string | null, device: string | null = null, samePhoneAs: string | null = null): Promise<JoinResult> {
   const token = randomToken();
-  const ip = await clientIp();
+  const ip = await ipHash();
   const guest = await tx(async (c) => {
     const ev = await one<{ guest_count: number }>("select guest_count from events where id = $1 for update", [e.id], c);
     if (!ev || ev.guest_count >= e.cfg.limits.max_guests) return null;
     const g = await one<Guest>(
-      "insert into guests (event_id, name, token_hash, ip_hash) values ($1, $2, $3, $4) returning id, event_id, name, upload_count, is_blocked",
-      [e.id, name, sha256(token), sha256(`ip:${ip}`).slice(0, 16)],
+      `insert into guests (event_id, name, token_hash, ip_hash, device_hash, same_phone_as) values ($1, $2, $3, $4, $5, $6)
+       returning id, event_id, name, upload_count, is_blocked`,
+      [e.id, name, sha256(token), ip, device, samePhoneAs],
       c,
     );
     await q("update events set guest_count = guest_count + 1 where id = $1", [e.id], c);
@@ -75,18 +78,25 @@ export async function joinEvent(e: EventWithConfig, name: string | null): Promis
   return { ok: true, guest, key };
 }
 
+export type PhoneMatch = { id: string; name: string | null; photos: number; blocked: boolean; byDevice: boolean };
+
 /**
- * Someone joining with the same name from the same network as an earlier guest
- * is most likely that guest in another browser on the same phone.
+ * An earlier guest who is probably this person on another browser of the same
+ * phone. Always needs the same network, plus either the same device signature
+ * or the same name. Device matches rank first.
  */
-export async function sameNameNearby(eventId: string, name: string) {
-  const ip = sha256(`ip:${await clientIp()}`).slice(0, 16);
-  return one<{ id: string; name: string; photos: number }>(
-    `select g.id, g.name, (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos
-     from guests g where g.event_id = $1 and lower(g.name) = lower($2) and g.ip_hash = $3 and not g.is_blocked
-     order by g.upload_count desc, g.created_at limit 1`,
-    [eventId, name, ip],
+export async function findSamePhone(eventId: string, name: string | null, device: string | null): Promise<PhoneMatch | null> {
+  if (!name && !device) return null;
+  const r = await one<{ id: string; name: string | null; photos: number; is_blocked: boolean; by_device: boolean }>(
+    `select g.id, g.name, g.is_blocked, (g.device_hash is not distinct from $4 and $4 is not null) as by_device,
+       (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos
+     from guests g
+     where g.event_id = $1 and g.ip_hash = $2 and g.same_phone_as is null
+       and (($4::text is not null and g.device_hash = $4) or ($3::text is not null and lower(g.name) = lower($3)))
+     order by (g.device_hash = $4) desc nulls last, g.upload_count desc, g.created_at limit 1`,
+    [eventId, await ipHash(), name, device],
   );
+  return r ? { id: r.id, name: r.name, photos: r.photos, blocked: r.is_blocked, byDevice: r.by_device } : null;
 }
 
 /** Signs this browser in as an existing guest (another browser keeps its own session). */
