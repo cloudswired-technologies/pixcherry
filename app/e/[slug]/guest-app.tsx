@@ -917,6 +917,7 @@ function JoinForm({
   const [name, setName] = useState("");
   const [token, setToken] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
+  const [tick, setTick] = useState(false);
   const [widget, setWidget] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<JoinState["match"] | null>(null);
@@ -928,7 +929,8 @@ function JoinForm({
     return () => clearTimeout(t);
   }, [siteKey, widget]);
   if (!canUpload) return <p className="text-sm text-muted-foreground">This album is closed for new photos and wishes.</p>;
-  const waiting = !!siteKey && !token && !slow;
+  // Waiting for the bot check; if it asks for a tick, wait for that (never submit without it).
+  const waiting = !!siteKey && !token && (!slow || tick);
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // The "Yes, that's me" / "No" buttons carry name="same".
@@ -943,6 +945,7 @@ function JoinForm({
         // Tokens are single use: get a fresh one for the next try.
         setToken(null);
         setSlow(false);
+        setTick(false);
         setWidget((w) => w + 1);
       }
     });
@@ -965,7 +968,7 @@ function JoinForm({
           />
         </label>
       ) : null}
-      {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} /> : null}
+      {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} onInteractive={() => setTick(true)} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
       {match && match.name.toLowerCase() === name.trim().toLowerCase() ? (
         <div className="grid gap-2 rounded-2xl bg-brand-soft p-4" role="group" aria-label="Welcome back">
@@ -983,7 +986,7 @@ function JoinForm({
       ) : (
         <button disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
           {busy || waiting ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
-          {waiting ? "Just a moment…" : "Let's go 🎉"}
+          {waiting ? (tick ? "Tick the box above first" : "Just a moment…") : "Let's go 🎉"}
         </button>
       )}
     </form>

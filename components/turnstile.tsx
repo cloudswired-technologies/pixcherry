@@ -34,11 +34,13 @@ function loadApi() {
   return loading;
 }
 
-export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken?: (token: string | null) => void }) {
+export function Turnstile({ siteKey, onToken, onInteractive }: { siteKey: string; onToken?: (token: string | null) => void; onInteractive?: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const cb = useRef(onToken);
+  const ask = useRef(onInteractive);
   useEffect(() => {
     cb.current = onToken;
+    ask.current = onInteractive;
   });
   useEffect(() => {
     let id: string | null = null;
@@ -56,6 +58,8 @@ export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken?: (to
             if (id) api.reset(id);
           },
           "error-callback": () => cb.current?.(null),
+          // Cloudflare wants a tick in the box ("Verify you are human").
+          "before-interactive-callback": () => ask.current?.(),
         });
       })
       .catch(() => cb.current?.(null));
