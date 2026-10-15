@@ -127,7 +127,7 @@ test("A to Z on a phone", async ({ browser }) => {
   await g1.getByRole("button", { name: /Share 4 photos/ }).click();
   await expect(g1.getByRole("status")).toContainText("photos shared", { timeout: 60_000 });
   await shot(g1, "guest-shared-toast");
-  await g1.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g1.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g1.getByAltText("Photo by Siti")).toHaveCount(4, { timeout: 60_000 });
 
   // ------------------------------------------------------------------ guest 2: camera, mission, wish, hearts
@@ -161,7 +161,7 @@ test("A to Z on a phone", async ({ browser }) => {
   await g2.getByRole("button", { name: "Send wish" }).click();
   await expect(g2.getByText("— Amir")).toBeVisible();
   await shot(g2, "guest-wishes", { bar: true });
-  await g2.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g2.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g2.getByAltText("Photo by Siti")).toHaveCount(4, { timeout: 30_000 });
   for (const i of [0, 1]) {
     await g2.getByAltText("Photo by Siti").nth(i).click();
@@ -196,7 +196,7 @@ test("A to Z on a phone", async ({ browser }) => {
   await g1.getByRole("button", { name: /Amir/ }).first().click();
   await expect(g1.getByRole("heading", { name: "Photos by Amir" })).toBeVisible();
   await shot(g1, "guest-person", { bar: true });
-  await g1.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g1.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await g1.getByRole("combobox").selectOption("top");
   await shot(g1, "guest-all-most-loved", { bar: true });
   await g1.getByRole("button", { name: "More" }).click();

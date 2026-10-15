@@ -108,7 +108,7 @@ test("screens", async ({ browser }) => {
   await g2.getByRole("textbox").fill("Selamat pengantin baru Aina & Hakim! Semoga bahagia hingga ke Jannah 🤍");
   await g2.getByRole("button", { name: "Send wish" }).click();
   await expect(g2.getByText("— Amir")).toBeVisible();
-  await g2.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g2.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g2.getByAltText("Photo by Siti")).toHaveCount(files.length, { timeout: 30_000 });
   for (const i of [0, 1, 2]) {
     await g2.getByAltText("Photo by Siti").nth(i).click();
@@ -129,14 +129,14 @@ test("screens", async ({ browser }) => {
   await imagesLoaded(g);
   await g.waitForTimeout(800);
   await g.screenshot({ path: `${OUT}/guest-highlights.png`, fullPage: true });
-  await g.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await imagesLoaded(g);
   await g.waitForTimeout(600);
   await g.screenshot({ path: `${OUT}/guest-all.png`, fullPage: true });
   await g.getByRole("button", { name: /^Wishes/ }).click();
   await g.waitForTimeout(800);
   await g.screenshot({ path: `${OUT}/guest-wishes.png`, fullPage: true });
-  await g.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await g.getByAltText("Photo by Siti").nth(1).click();
   await g.waitForTimeout(800);
   await g.screenshot({ path: `${OUT}/guest-viewer.png` });

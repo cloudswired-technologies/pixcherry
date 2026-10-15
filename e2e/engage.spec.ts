@@ -75,7 +75,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   // Upload done + worker -> mission ticked, photo in gallery, filter applied (Noir = greyscale).
   await g.getByRole("button", { name: "Highlights" }).click(); // sharing jumps to All Photos
   await expect(g.getByText("1/8")).toBeVisible({ timeout: 60_000 });
-  await g.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 60_000 });
   const [shot] = await sql("select id, mission_id, width, height, caption from photos where event_id = $1 and status = 'ready'", [ev.id]);
   expect(shot.mission_id).toBe(missions[0].id);
@@ -104,7 +104,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g2.getByRole("dialog", { name: "Ready to share?" })).toBeVisible();
   await g2.getByRole("button", { name: /Share 1 photo/ }).click();
   await expect(g2.getByRole("status")).toContainText("Shared!", { timeout: 60_000 });
-  await g2.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g2.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g2.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 30_000 });
   await g2.getByAltText("Photo by Amir").click();
   const [voteRes] = await Promise.all([

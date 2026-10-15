@@ -141,7 +141,7 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await expect(g1.getByText("⚡ Fastest")).toBeVisible({ timeout: 35_000 });
 
   // ---------------------------------------------------------------- captions (own photo), zoom
-  await g1.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g1.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g1.getByAltText("Photo by Siti Aminah")).toHaveCount(3, { timeout: 60_000 });
   await g1.getByAltText("Photo by Siti Aminah").first().click();
   await g1.getByRole("button", { name: "Zoom in" }).click();
@@ -162,7 +162,7 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   const g2 = await c2.newPage();
   await seenInstall(g2, slug);
   await g2.goto(`/e/${slug}`);
-  await g2.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g2.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await g2.getByAltText("Photo by Siti Aminah").first().click();
   await expect(g2.getByRole("dialog", { name: "Photo" }).getByText("So pretty! 😍")).toBeVisible();
   await expect(g2.getByRole("button", { name: "Add a caption" })).toHaveCount(0);
@@ -245,7 +245,7 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   // Someone else's upload in progress shows as a tile on this phone.
   const [siti] = await sql("select id from guests where event_id = $1 and name = 'Siti Aminah'", [ev.id]);
   const [fake] = await sql("insert into photos (event_id, guest_id, content_type, declared_bytes) values ($1, $2, 'image/jpeg', 1000) returning id", [ev.id, siti.id]);
-  await g6.getByRole("button", { name: "All Photos", exact: true }).click();
+  await g6.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g6.getByText("Siti Aminah is sharing…").first()).toBeVisible({ timeout: 15_000 });
   await sql("delete from photos where id = $1", [fake.id]);
   await expect(g6.getByText("Siti Aminah is sharing…")).toHaveCount(0, { timeout: 15_000 });

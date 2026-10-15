@@ -710,7 +710,8 @@ export function GuestApp(p: Props) {
 
       {/* ------------------------------------------------------------ bottom menu (one place for every action) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur" aria-label="Actions">
-        <div className="mx-auto grid max-w-md grid-cols-4 items-end px-2 pt-1.5">
+        <div className={`mx-auto grid max-w-md items-end px-1 pt-1.5 ${f.camera ? "grid-cols-5" : "grid-cols-4"}`}>
+          <BarButton icon={Images} label="All Photos" onClick={() => goTab("all")} />
           <BarButton icon={ImagePlus} label="Upload" onClick={() => start("upload")} disabled={!canShoot || (f.camera && p.event.cameraOnly) || (!!joined && shotsLeft <= 0)} />
           {f.camera ? (
             <button type="button" onClick={() => start("camera")} disabled={!canShoot || (!!joined && shotsLeft <= 0)} className="-mt-6 grid justify-items-center gap-1 pb-1.5 text-[11px] font-bold text-brand disabled:opacity-40" aria-label="Snap">
@@ -719,9 +720,7 @@ export function GuestApp(p: Props) {
               </span>
               Snap
             </button>
-          ) : (
-            <BarButton icon={Images} label="Gallery" onClick={() => goTab("all")} />
-          )}
+          ) : null}
           <BarButton icon={MessageCircleHeart} label="Wishes" onClick={() => (f.wishes ? (canShoot ? start("wish") : goTab("wishes")) : undefined)} disabled={!f.wishes} />
           <BarButton icon={MoreHorizontal} label="More" onClick={() => setSheet("more")} />
         </div>
