@@ -486,7 +486,7 @@ export function WishForm({ slug, myPhotos, onDone }: { slug: string; myPhotos: G
 // ------------------------------------------------------------------ hashtags
 
 /** One-tap hashtag chips (+ type your own). `dark` for the camera. */
-export function TagPicker({ suggested, value, onChange, dark }: { suggested: string[]; value: string[]; onChange: (tags: string[]) => void; dark?: boolean }) {
+export function TagPicker({ suggested, value, onChange, dark, wrap }: { suggested: string[]; value: string[]; onChange: (tags: string[]) => void; dark?: boolean; wrap?: boolean }) {
   const [draft, setDraft] = useState("");
   const all = [...new Set([...suggested, ...value])];
   const toggle = (t: string) => onChange(value.includes(t) ? value.filter((x) => x !== t) : value.length >= 5 ? value : [...value, t]);
@@ -496,7 +496,7 @@ export function TagPicker({ suggested, value, onChange, dark }: { suggested: str
     setDraft("");
   };
   return (
-    <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1" aria-label="Hashtags">
+    <div className={wrap ? "flex flex-wrap gap-2" : "no-scrollbar flex gap-2 overflow-x-auto pb-1"} aria-label="Hashtags">
       {all.map((t) => {
         const on = value.includes(t);
         return (

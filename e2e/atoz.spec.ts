@@ -137,24 +137,34 @@ test("A to Z on a phone", async ({ browser }) => {
   await g2.getByRole("button", { name: /Selfie with the couple/ }).first().click();
   await g2.getByLabel("Your name").fill("Amir");
   await g2.getByRole("button", { name: /Let's go/ }).click();
-  // Snap = the phone's own camera; the test hands it a photo, then the "develop" screen.
-  await expect(g2.getByRole("button", { name: "You: Amir" })).toBeVisible();
-  await g2.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: photos[0] });
-  const dev = g2.getByRole("dialog", { name: "Your photo" });
-  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
+  // Snap = the PixCamera (fake webcam in tests): looks, zoom, review with hashtags + caption.
+  const cam = g2.getByRole("dialog", { name: "Camera" });
+  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
   for (const look of ["Natural", "Disposable", "Cinematic", "Y2K Digicam", "Polaroid"]) {
-    await dev.getByRole("button", { name: look }).click();
-    await shot(g2, `develop-${look.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+    await cam.getByRole("button", { name: look }).click();
+    await shot(g2, `camera-${look.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
   }
-  await dev.getByRole("button", { name: "Kodak Gold" }).click();
-  await dev.getByRole("button", { name: "#selfie" }).click();
-  await dev.getByLabel("Add your own hashtag").fill("bestday");
-  await dev.getByLabel("Add your own hashtag").press("Enter");
-  await expect(dev.getByRole("button", { name: "#bestday" })).toHaveAttribute("aria-pressed", "true");
-  await dev.getByLabel("Caption").fill("With the happy couple!");
-  await shot(g2, "develop-ready");
-  await dev.getByRole("button", { name: "Share" }).click();
-  await expect(dev).toHaveCount(0);
+  await cam.getByRole("button", { name: "Kodak Gold" }).click();
+  await cam.getByRole("button", { name: "Zoom 2×" }).click();
+  await shot(g2, "camera-zoom");
+  await cam.getByRole("button", { name: "Take photo" }).click();
+  await expect(cam.getByAltText("Your photo")).toBeVisible();
+  await cam.getByRole("button", { name: "Hashtags" }).click();
+  const tagPanel = cam.getByRole("dialog", { name: "Add hashtags" });
+  await tagPanel.getByRole("button", { name: "#selfie" }).click();
+  await tagPanel.getByLabel("Add your own hashtag").fill("bestday");
+  await tagPanel.getByLabel("Add your own hashtag").press("Enter");
+  await expect(tagPanel.getByRole("button", { name: "#bestday" })).toHaveAttribute("aria-pressed", "true");
+  await shot(g2, "camera-hashtags");
+  await tagPanel.getByRole("button", { name: "Done" }).click();
+  await cam.getByRole("button", { name: "Add caption" }).click();
+  await cam.getByRole("dialog", { name: "Write a caption" }).getByLabel("Caption").fill("With the happy couple!");
+  await cam.getByRole("button", { name: "Done" }).click();
+  await shot(g2, "camera-review");
+  await cam.getByRole("button", { name: "Share" }).click();
+  await expect(cam.getByAltText("Last shot")).toBeVisible();
+  await cam.getByRole("button", { name: "Back to album" }).click();
+  await expect(cam).toHaveCount(0);
   await g2.getByRole("button", { name: "Wishes" }).last().click();
   await g2.getByRole("textbox").fill("Selamat pengantin baru Aina & Hakim! Semoga bahagia hingga ke Jannah 🤍");
   await shot(g2, "guest-wish-sheet");

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, Loader2, RotateCcw } from "lucide-react";
 import { LOOKS, createRenderer, drawOverlays, polaroid, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, unlockAudio } from "@/lib/client/camera-sounds";
-import { TagPicker } from "./panels";
+import { CaptionOverlay, ShotExtras } from "./shot-extras";
 
 // "Develop" a photo from the phone's own camera: the native camera gives the
 // best quality (full sensor, HDR, zoom), then the guest picks a film look,
@@ -207,7 +207,8 @@ export function Develop({
         ) : !img ? (
           <Loader2 className="size-8 animate-spin text-white/60" aria-label="Developing" />
         ) : (
-          <div className={look.polaroid ? "bg-[#fbf8f1] p-[3%] pb-[14%] shadow-2xl" : ""}>
+          <div className={look.polaroid ? "relative bg-[#fbf8f1] p-[3%] pb-[14%] shadow-2xl" : "relative"}>
+            <CaptionOverlay caption={caption} />
             <canvas ref={view} style={{ width: look.polaroid ? fit.w * 0.88 : fit.w, height: look.polaroid ? fit.h * 0.88 : fit.h }} className="block rounded-lg [animation:pc-develop_0.6s_ease]" aria-label="Photo preview" role="img" />
           </div>
         )}
@@ -217,32 +218,12 @@ export function Develop({
         <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4" aria-label="Looks">
           {LOOKS.map((x, i) => (
             <button key={x.id} type="button" onClick={() => setLookIdx(i)} className="grid w-14 shrink-0 snap-center justify-items-center gap-1" aria-pressed={i === lookIdx}>
-              <span className={`size-11 rounded-full border-2 transition-transform ${i === lookIdx ? "scale-110 border-white" : "border-transparent"}`} style={{ background: x.swatch }} />
+              <span className={`size-9 rounded-full border-2 transition-transform ${i === lookIdx ? "scale-110 border-white" : "border-transparent"}`} style={{ background: x.swatch }} />
               <span className={`w-16 truncate text-center text-[10px] font-semibold ${i === lookIdx ? "text-white" : "text-white/55"}`}>{x.name}</span>
             </button>
           ))}
         </div>
-        {missions.length ? (
-          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-            <button type="button" onClick={() => onMission(null)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${mission ? "bg-white/10" : "bg-white text-black"}`}>
-              No mission
-            </button>
-            {missions.map((m) => (
-              <button key={m.id} type="button" onClick={() => onMission(m.id)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${mission === m.id ? "bg-brand text-white" : "bg-white/10"}`}>
-                {m.emoji ?? "🎯"} {m.title}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {suggestedTags ? <TagPicker suggested={suggestedTags} value={tags} onChange={setTags} dark /> : null}
-        <input
-          value={caption}
-          onChange={(e) => setCaption(e.target.value.slice(0, 140))}
-          placeholder="Add a caption… (optional)"
-          aria-label="Caption"
-          enterKeyHint="done"
-          className="h-11 rounded-full bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/50 focus:bg-white/15"
-        />
+        <ShotExtras missions={missions} mission={mission} onMission={onMission} suggestedTags={suggestedTags} tags={tags} onTags={setTags} caption={caption} onCaption={setCaption} />
         <div className="grid grid-cols-2 gap-3">
           <button type="button" onClick={onRetake} disabled={busy} className="inline-flex h-13 items-center justify-center gap-2 rounded-full border border-white/25 py-3.5 font-semibold disabled:opacity-50">
             <RotateCcw className="size-5" aria-hidden /> Retake

@@ -11,7 +11,8 @@ import { eventPhase } from "@/lib/limits";
 export const metadata = { title: "Events" };
 
 const FILTERS = {
-  all: { label: "All", where: "true" },
+  // Deleted albums only clutter the list; they have their own filter.
+  all: { label: "All", where: "e.purged_at is null" },
   live: { label: "Live now", where: "e.paid_at is not null and e.purged_at is null and now() between e.starts_at and e.ends_at" },
   upcoming: { label: "Upcoming", where: "e.paid_at is not null and e.purged_at is null and e.starts_at > now()" },
   ended: { label: "Ended", where: "e.paid_at is not null and e.purged_at is null and e.ends_at < now()" },
@@ -51,7 +52,7 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Events</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Every album on PixCherry, newest first.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Every album on PixCherry, newest first. Deleted ones are under “Deleted”.</p>
         </div>
         <form className="relative w-full sm:w-80">
           <input type="hidden" name="status" value={status} />

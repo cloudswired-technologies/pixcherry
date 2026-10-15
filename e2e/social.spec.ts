@@ -126,14 +126,21 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await expect(g1.getByAltText("Photo by Siti Aminah")).toHaveCount(2, { timeout: 60_000 });
   await expect(g1.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
 
-  // ---------------------------------------------------------------- Snap: phone camera -> develop -> share (mission)
+  // ---------------------------------------------------------------- Snap: PixCamera (mission), then the camera roll
   await g1.getByRole("button", { name: "Missions", exact: true }).click();
   await g1.getByRole("button", { name: "Snap it" }).click();
-  await g1.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: await jpeg("#f2b134") });
-  const dev = g1.getByRole("dialog", { name: "Your photo" });
-  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
-  await dev.getByRole("button", { name: "Share" }).click();
-  await expect(dev).toHaveCount(0);
+  const cam = g1.getByRole("dialog", { name: "Camera" });
+  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
+  await cam.getByRole("button", { name: "Take photo" }).click();
+  await cam.getByRole("button", { name: "Share" }).click();
+  await cam.getByRole("button", { name: "Open your shots" }).click();
+  const roll = cam.getByRole("dialog", { name: "Your shots" });
+  await expect(roll.getByText("1 of 1")).toBeVisible();
+  await roll.getByRole("button", { name: "Back to camera" }).click();
+  await expect(roll).toHaveCount(0);
+  await expect(cam).toBeVisible(); // back from the roll stays in the camera
+  await cam.getByRole("button", { name: "Back to album" }).click();
+  await expect(cam).toHaveCount(0);
   // Only mission done -> Mission Master.
   await g1.getByRole("button", { name: "Missions", exact: true }).click();
   await expect(g1.getByRole("heading", { name: "Mission Master!" })).toBeVisible({ timeout: 60_000 });
@@ -346,6 +353,14 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await expect(box.getByText("2 /")).toBeVisible();
   await box.getByRole("button", { name: "Close photo" }).click();
   await expect(box).toHaveCount(0);
+
+  // ---------------------------------------------------------------- fallback: the phone's camera app -> develop
+  await g5.goto(`/e/${slug}`);
+  await g5.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: await jpeg("#f2b134") });
+  const dev = g5.getByRole("dialog", { name: "Your photo" });
+  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
+  await dev.getByRole("button", { name: "Share" }).click();
+  await expect(dev).toHaveCount(0);
 
   for (const c of [c1, c2, c3, c4, c5, c6, c7, c8]) await c.close();
 });

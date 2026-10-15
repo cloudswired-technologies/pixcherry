@@ -33,6 +33,7 @@ import { deviceSignals } from "@/lib/client/device";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
+import { PixCamera } from "./camera";
 import { Develop, PHOTO_JPEG, PHOTO_MAX_PX } from "./develop";
 import { BestMoments, Stories, type Moment } from "./highlights";
 import { InstallGuide, useInstall } from "./install";
@@ -124,7 +125,9 @@ export function GuestApp(p: Props) {
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
   // The viewer follows a photo id: new photos arriving at the top must not shift what's on screen.
   const [open, setOpen] = useState<{ list: "all" | "album"; id: string } | null>(null);
-  // A photo from the phone's own camera, waiting in the "develop" screen.
+  // Snap opens the PixCamera; if the browser can't open a camera, the phone's own
+  // camera app is the fallback and its photo goes through the "develop" screen.
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [shot, setShot] = useState<File | null>(null);
   const snap = useRef<HTMLInputElement>(null);
   const [mission, setMission] = useState<string | null>(null);
@@ -314,7 +317,7 @@ export function GuestApp(p: Props) {
       if (kind === "wish") return setWishOpen(true);
       if (kind === "camera" && f.camera) {
         setMission(m);
-        return snap.current?.click();
+        return setCameraOpen(true);
       }
       setPickMissionId(m);
       pick.current?.click();
@@ -333,8 +336,7 @@ export function GuestApp(p: Props) {
       // Android still counts the "Let's go" tap and opens the camera/picker; iOS needs one more tap.
       if (next.kind === "camera" && f.camera) {
         setMission(next.mission ?? null);
-        snap.current?.click();
-        flash("You're in! Tap Snap to take your photo 📸");
+        setTimeout(() => setCameraOpen(true), 50);
       } else if (next.kind === "upload") {
         pick.current?.click();
         flash("You're in! Tap Upload to pick your photos 📸");
@@ -833,7 +835,24 @@ export function GuestApp(p: Props) {
         </div>
       ) : null}
 
-      {/* Snap opens the phone's own camera (best quality, zoom, HDR); "develop" adds the look. */}
+      {cameraOpen ? (
+        <PixCamera
+          onClose={() => setCameraOpen(false)}
+          onShot={(file, extra) => up.add([file], { mission, prepared: true, tags: extra.tags, caption: extra.caption })}
+          onFallback={() => {
+            history.back();
+            snap.current?.click();
+          }}
+          shotsLeft={shotsLeft}
+          maxBytes={p.limits.maxBytes}
+          missions={hasMissions ? stats.missions : []}
+          mission={mission}
+          onMission={setMission}
+          suggestedTags={f.tags ? p.suggestedTags : null}
+          eventName={p.event.name}
+        />
+      ) : null}
+      {/* Fallback: the phone's own camera app, then "develop" adds the look. */}
       <input
         ref={snap}
         type="file"

@@ -55,22 +55,29 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g.getByRole("heading", { name: "🎯 Snap missions" })).toBeVisible();
   await expect(g.getByText("0/8")).toBeVisible();
 
-  // Tap a mission -> join -> the phone's own camera opens (here: the test hands it a photo)
-  // -> "develop": pick a look and a caption, then share.
+  // Tap a mission -> join -> the PixCamera opens on that mission (fake webcam in tests):
+  // look, zoom, shutter, review with caption, share.
   await g.getByRole("button", { name: /Selfie with the couple/ }).first().click();
   await g.getByLabel("Your name").fill("Amir");
   await g.getByRole("button", { name: /Let's go/ }).click();
-  await expect(g.getByRole("button", { name: "You: Amir" })).toBeVisible();
-  const colour = await sharp({ create: { width: 1600, height: 1200, channels: 3, background: "#3d8be8" } }).jpeg().toBuffer();
-  await g.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: colour });
-  const dev = g.getByRole("dialog", { name: "Your photo" });
-  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
-  await expect(dev.locator('[aria-live="polite"]')).toContainText("20");
-  await expect(dev.getByRole("button", { name: /Selfie with the couple/ })).toHaveClass(/bg-brand/); // the mission tapped
-  await dev.getByRole("button", { name: "Noir" }).click();
-  await dev.getByLabel("Caption").fill("Best seat in the house");
-  await dev.getByRole("button", { name: "Share" }).click();
-  await expect(dev).toHaveCount(0);
+  const cam = g.getByRole("dialog", { name: "Camera" });
+  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
+  await expect(cam.locator('[aria-live="polite"]')).toContainText("20");
+  await expect(cam.getByRole("button", { name: /Selfie with the couple/ })).toHaveClass(/bg-brand/); // the mission tapped
+  await cam.getByRole("button", { name: "Noir" }).click();
+  await cam.getByRole("button", { name: "Zoom 2×" }).click();
+  await expect(cam.getByRole("button", { name: "Zoom 2×" })).toHaveText("2×");
+  await cam.getByRole("button", { name: "Take photo" }).click();
+  await expect(cam.getByAltText("Your photo")).toBeVisible();
+  await expect(cam.getByText(/MP · (camera photo|video frame)/)).toBeVisible();
+  await cam.getByRole("button", { name: "Add caption" }).click();
+  await cam.getByRole("dialog", { name: "Write a caption" }).getByLabel("Caption").fill("Best seat in the house");
+  await cam.getByRole("button", { name: "Done" }).click();
+  await expect(cam.getByText("Best seat in the house")).toBeVisible(); // shown on the photo
+  await cam.getByRole("button", { name: "Share" }).click();
+  await expect(cam.getByAltText("Last shot")).toBeVisible();
+  await cam.getByRole("button", { name: "Back to album" }).click();
+  await expect(cam).toHaveCount(0);
 
   // Upload done + worker -> mission ticked, photo in gallery, filter applied (Noir = greyscale).
   await g.getByRole("button", { name: "Highlights" }).click(); // sharing jumps to All Photos
