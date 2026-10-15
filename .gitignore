@@ -26,3 +26,4 @@ next-env.d.ts
 .npm.log
 !.env.example
 *.log
+assets/fonts/*.ttf
