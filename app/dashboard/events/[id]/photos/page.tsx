@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Heart, Trash2, X } from "lucide-react";
-import { Confirm } from "@/components/confirm";
+import { Check, X } from "lucide-react";
 import { Card, LinkButton, Notice, PageHeader, cn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { one, q } from "@/lib/db";
 import { getManagedEvent } from "@/lib/events";
 import { formatDateTime } from "@/lib/format";
 import { photoKeys, publicUrl } from "@/lib/storage";
-import { approve, removePhoto } from "../../actions";
+import { approve } from "../../actions";
+import { PhotoGrid } from "./photo-grid";
 
 export const metadata = { title: "Photos" };
 
@@ -135,61 +135,27 @@ export default async function Photos({ params, searchParams }: { params: Promise
       {list.length === 0 ? (
         <Card className="py-12 text-center text-sm text-muted-foreground">{view === "review" ? "Nothing waiting for approval." : "No photos here yet."}</Card>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          {list.map((p) => (
-            <div key={p.id} className={cn("overflow-hidden rounded-2xl border bg-card shadow-soft", p.status === "review" ? "border-warn" : "border-border")}>
-              <a href={publicUrl(photoKeys(e.id, p.id).md)} target="_blank" rel="noreferrer" className="relative block">
-                <img src={publicUrl(photoKeys(e.id, p.id).sm)} alt={p.name ? `Photo by ${p.name}` : "Event photo"} loading="lazy" className="aspect-square w-full bg-muted object-cover" />
-                {p.emoji ? <span className="absolute left-2 top-2 rounded-full bg-white/90 px-1.5 text-sm">{p.emoji}</span> : null}
-                {p.status === "review" ? <span className="absolute right-2 top-2 rounded-full bg-warn px-2 py-0.5 text-[11px] font-bold text-white">To approve</span> : null}
-                {p.vote_count ? (
-                  <span className="absolute bottom-2 right-2 inline-flex items-center gap-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {p.vote_count ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Heart className="size-3 fill-white" aria-hidden /> {p.vote_count}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
-              </a>
-              <div className="grid gap-1.5 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  {p.guest_id ? (
-                    <Link href={link({ guest: p.guest_id, page: undefined })} className="min-w-0 truncate text-sm font-semibold hover:underline">
-                      {p.name ?? "Guest"}
-                    </Link>
-                  ) : (
-                    <span className="text-sm font-semibold">Organiser</span>
-                  )}
-                  <div className="flex shrink-0 gap-1">
-                    {p.status === "review" ? (
-                      <form action={approve.bind(null, e.id, [p.id])}>
-                        <button className="grid size-8 place-items-center rounded-full bg-ok-soft text-ok" aria-label="Approve photo">
-                          <Check className="size-4" aria-hidden />
-                        </button>
-                      </form>
-                    ) : null}
-                    <Confirm
-                      action={removePhoto.bind(null, e.id, p.id)}
-                      title="Delete this photo?"
-                      message="It disappears from the album, the slideshow and downloads. This can't be undone."
-                      confirm="Delete photo"
-                      label="Delete photo"
-                      className="grid size-8 place-items-center rounded-full bg-danger-soft text-danger"
-                    >
-                      <Trash2 className="size-4" aria-hidden />
-                    </Confirm>
-                  </div>
-                </div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {p.caption ? <span className="mb-0.5 block whitespace-normal text-xs text-foreground line-clamp-2">“{p.caption}”</span> : null}
-                  {p.ready_at ? formatDateTime(p.ready_at) : "Processing"}
-                  {p.tags?.length ? ` · ${p.tags.map((t) => `#${t}`).join(" ")}` : ""}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PhotoGrid
+          eventId={e.id}
+          slug={e.slug}
+          photos={list.map((p) => {
+            const k = photoKeys(e.id, p.id);
+            return {
+              id: p.id,
+              sm: publicUrl(k.sm),
+              md: publicUrl(k.md),
+              full: publicUrl(k.full),
+              name: p.name,
+              guestHref: p.guest_id ? link({ guest: p.guest_id, page: undefined }) : null,
+              at: p.ready_at ? formatDateTime(p.ready_at) : "Processing",
+              caption: p.caption,
+              tags: p.tags ?? [],
+              votes: p.vote_count,
+              emoji: p.emoji,
+              review: p.status === "review",
+            };
+          })}
+        />
       )}
 
       <div className="flex items-center justify-between gap-2">

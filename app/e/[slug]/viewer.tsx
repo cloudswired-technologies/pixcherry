@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, Download, Heart, Loader2, Pencil, Share2, X, ZoomIn } from "lucide-react";
+import { Check, ChevronLeft, Download, Heart, Loader2, Pencil, Share2, ZoomIn, ZoomOut } from "lucide-react";
+import { ZoomableImage, type ZoomHandle } from "@/components/zoomable";
 import type { GalleryPhoto } from "@/lib/photos";
 import { initial } from "./panels";
 
@@ -38,20 +39,20 @@ export function Viewer({
 }) {
   const ph = photos[index];
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const lastTap = useRef(0);
   const strip = useRef<HTMLDivElement>(null);
   const [burst, setBurst] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
   // Editing my caption: { id, text } of the photo being captioned.
   const [edit, setEdit] = useState<{ id: string; text: string; busy?: boolean } | null>(null);
-  // Zoom shows the full-size file (previews are lighter); pinch or the magnifier opens it.
-  const [zoom, setZoom] = useState<string | null>(null);
+  // Zoom happens in place (pinch, wheel or the magnifier); swiping waits until zoomed out.
+  const [zoomed, setZoomed] = useState(false);
+  const zoomer = useRef<ZoomHandle>(null);
   const editRef = useRef(false);
   const zoomRef = useRef(false);
   useEffect(() => {
     editRef.current = edit !== null;
-    zoomRef.current = zoom !== null;
-  }, [edit, zoom]);
+    zoomRef.current = zoomed;
+  }, [edit, zoomed]);
   const go = (i: number) => {
     if (i < 0 || i >= photos.length) return;
     setDir(i > index ? 1 : -1);
@@ -78,7 +79,7 @@ export function Viewer({
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return zoomRef.current ? setZoom(null) : editRef.current ? setEdit(null) : history.back();
+      if (e.key === "Escape") return zoomRef.current ? zoomer.current?.reset() : editRef.current ? setEdit(null) : history.back();
       if (editRef.current) return;
       if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
       if (e.key === "ArrowRight" && index < photos.length - 1) onIndex(index + 1);
@@ -131,8 +132,8 @@ export function Viewer({
           {index + 1} of {Math.max(total ?? 0, photos.length)}
         </div>
         {ph.status === "ready" ? (
-          <button type="button" onClick={() => setZoom(ph.full)} className="grid size-10 place-items-center rounded-full hover:bg-white/10" aria-label="Zoom in">
-            <ZoomIn className="size-5" aria-hidden />
+          <button type="button" onClick={() => zoomer.current?.toggle()} className="grid size-10 place-items-center rounded-full hover:bg-white/10" aria-label={zoomed ? "Zoom out" : "Zoom in"}>
+            {zoomed ? <ZoomOut className="size-5" aria-hidden /> : <ZoomIn className="size-5" aria-hidden />}
           </button>
         ) : (
           <div className="size-10" />
@@ -141,41 +142,31 @@ export function Viewer({
 
       <div
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
-        onDoubleClick={() => !ph.voted && heart()}
         onTouchStart={(e) => {
-          if (e.touches.length === 2 && ph.status === "ready") {
-            touch.current = null;
-            return setZoom(ph.full);
-          }
-          touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          touch.current = e.touches.length === 1 && !zoomRef.current ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
         }}
         onTouchEnd={(e) => {
           const s = touch.current;
           touch.current = null;
-          if (!s) return;
+          if (!s || zoomRef.current) return;
           const dx = e.changedTouches[0].clientX - s.x;
           const dy = e.changedTouches[0].clientY - s.y;
           if (dy > 90 && Math.abs(dx) < 60) return close(); // swipe down to close
           if (dx > 50) return go(index - 1);
           if (dx < -50) return go(index + 1);
-          const now = Date.now();
-          if (now - lastTap.current < 300) {
-            e.preventDefault();
-            if (!ph.voted) heart();
-            lastTap.current = 0;
-            return;
-          }
-          lastTap.current = now;
         }}
       >
-        <img
-          key={ph.id}
-          src={ph.md}
-          alt=""
-          draggable={false}
-          className="max-h-full max-w-full select-none object-contain"
-          style={{ animation: `${dir > 0 ? "pc-in-right" : "pc-in-left"} 0.3s ease` }}
-        />
+        <div key={ph.id} className="absolute inset-0" style={{ animation: `${dir > 0 ? "pc-in-right" : "pc-in-left"} 0.3s ease` }}>
+          <ZoomableImage
+            src={ph.md}
+            full={ph.status === "ready" ? ph.full : undefined}
+            alt={ph.by ? `Photo by ${ph.by}` : "Event photo"}
+            handle={zoomer}
+            onZoomChange={setZoomed}
+            // Double-tap hearts the photo (pinch or the magnifier to zoom).
+            onDoubleTap={voting && ph.status === "ready" ? () => !ph.voted && heart() : undefined}
+          />
+        </div>
         {burst ? <Heart key={burst} className="pointer-events-none absolute size-28 fill-brand text-brand drop-shadow-lg [animation:pc-heart_0.8s_ease_forwards]" aria-hidden /> : null}
         {mission ? (
           <span className="absolute left-3 top-3 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold backdrop-blur">
@@ -260,37 +251,6 @@ export function Viewer({
           </button>
         </div>
       </div>
-      {zoom ? <ZoomView src={zoom} onClose={() => setZoom(null)} /> : null}
-    </div>
-  );
-}
-
-/** Full-size photo, twice the screen width, pan with a finger. */
-function ZoomView({ src, onClose }: { src: string; onClose: () => void }) {
-  const box = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
-  return (
-    <div className="absolute inset-0 z-30 bg-black" role="dialog" aria-label="Zoomed photo">
-      <div ref={box} className="size-full overflow-auto overscroll-contain">
-        <img
-          src={src}
-          alt="Full size photo"
-          className="block w-[220%] max-w-none sm:w-[160%]"
-          onLoad={() => {
-            setLoaded(true);
-            const el = box.current;
-            if (el) el.scrollTo({ left: (el.scrollWidth - el.clientWidth) / 2, top: (el.scrollHeight - el.clientHeight) / 2 });
-          }}
-        />
-      </div>
-      {!loaded ? (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <Loader2 className="size-8 animate-spin text-white/70" aria-label="Loading full size" />
-        </div>
-      ) : null}
-      <button type="button" onClick={onClose} className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-black/60 text-white" aria-label="Close zoom">
-        <X className="size-5" aria-hidden />
-      </button>
     </div>
   );
 }

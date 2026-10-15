@@ -460,7 +460,7 @@ export function GuestApp(p: Props) {
   };
 
   return (
-    <div style={style} className="min-h-dvh bg-paper pb-28">
+    <div style={style} className="min-h-dvh bg-paper pb-36">
       {/* ------------------------------------------------------------ top bar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">

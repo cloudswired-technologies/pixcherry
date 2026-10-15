@@ -145,8 +145,8 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await expect(g1.getByAltText("Photo by Siti Aminah")).toHaveCount(3, { timeout: 60_000 });
   await g1.getByAltText("Photo by Siti Aminah").first().click();
   await g1.getByRole("button", { name: "Zoom in" }).click();
-  await expect(g1.getByAltText("Full size photo")).toHaveAttribute("src", /full.jpg/);
-  await g1.getByRole("button", { name: "Close zoom" }).click();
+  await expect(g1.locator('[data-zoomed="true"] img')).toHaveAttribute("src", /full.jpg/); // zooms in place, full file
+  await g1.getByRole("button", { name: "Zoom out" }).click();
   await g1.getByRole("button", { name: "Add a caption" }).click();
   await g1.getByRole("textbox", { name: "Caption" }).fill("So pretty! 😍");
   await g1.getByRole("button", { name: "Save caption" }).click();
@@ -335,6 +335,17 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await page.goto(`/dashboard/events/${ev.id}/photos?sort=top`);
   await expect(page.getByRole("link", { name: "Most loved" })).toHaveClass(/bg-ink/);
   await expect(page.getByAltText("Photo by Siti Aminah").first()).toBeVisible();
+  // A photo opens in a lightbox on the page (not a new tab) and zooms in place with the full file.
+  await page.getByRole("button", { name: "Open photo by Siti Aminah" }).first().click();
+  const box = page.getByRole("dialog", { name: "Photo" });
+  await expect(box).toBeVisible();
+  await box.getByRole("button", { name: "Zoom in" }).click();
+  await expect(box.locator('[data-zoomed="true"] img')).toHaveAttribute("src", /full.jpg/);
+  await box.getByRole("button", { name: "Zoom out" }).click();
+  await box.getByRole("button", { name: "Next photo" }).click();
+  await expect(box.getByText("2 /")).toBeVisible();
+  await box.getByRole("button", { name: "Close photo" }).click();
+  await expect(box).toHaveCount(0);
 
   for (const c of [c1, c2, c3, c4, c5, c6, c7, c8]) await c.close();
 });
