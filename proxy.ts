@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { RESERVED } from "@/lib/slug";
 
 // 1. Guest host (GUEST_URL, e.g. app.pixcherry.com): /<slug>/… is the guest app
 //    (served from /e/<slug>/…), / is "find your event", anything else goes to the main site.
@@ -26,7 +27,7 @@ export function proxy(req: NextRequest) {
     if (path === "/") return rewrite(req, "/find");
     if (path.startsWith("/e/")) return NextResponse.redirect(`${GUEST_URL}${path.slice(2)}${req.nextUrl.search}`, 308);
     const m = path.match(GUEST_PAGE);
-    if (m) return rewrite(req, `/e/${m[1]}${m[2] ?? ""}`);
+    if (m && !RESERVED.has(m[1])) return rewrite(req, `/e/${m[1]}${m[2] ?? ""}`);
     return NextResponse.redirect(`${APP_URL}${path}${req.nextUrl.search}`, 307);
   }
 

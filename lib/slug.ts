@@ -4,7 +4,7 @@
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
 
 // Paths the app itself uses on the guest host, plus names that would confuse guests.
-const RESERVED = new Set([
+export const RESERVED = new Set([
   "e", "api", "_next", "admin", "dashboard", "login", "logout", "app", "www", "static", "assets", "icon", "icons",
   "manifest", "sw", "help", "about", "pricing", "terms", "privacy", "find", "join", "new", "settings", "pixcherry",
   "support", "contact", "favicon", "robots", "sitemap", "img", "cdn", "mail", "blog", "status", "account",
