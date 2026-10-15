@@ -138,6 +138,16 @@
   from { transform: translate(120px, -260px) scale(3) rotate(-8deg); opacity: 0.4; }
   to { transform: none; opacity: 1; }
 }
+/* Skeleton sweep on photos that are still uploading. */
+@keyframes pc-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes pc-rise {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
   to { opacity: 1; transform: none; }

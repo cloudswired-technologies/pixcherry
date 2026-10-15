@@ -99,6 +99,7 @@ export type GalleryPhoto = {
   voted: boolean;
   mission: string | null;
   tags: string[];
+  comments: number;
 };
 
 type Row = {
@@ -113,6 +114,7 @@ type Row = {
   voted: boolean;
   mission_id: string | null;
   tags: string[];
+  comment_count: number;
 };
 
 function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto {
@@ -133,6 +135,7 @@ function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto
     voted: r.voted,
     mission: r.mission_id,
     tags: r.tags ?? [],
+    comments: r.comment_count ?? 0,
   };
 }
 
@@ -179,7 +182,7 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   }
   if (opts.since && !Number.isNaN(Date.parse(opts.since))) where += ` and p.ready_at > $${params.push(opts.since)}::timestamptz`;
   const rows = await q<Row>(
-    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags,
+    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags, p.comment_count,
        exists (select 1 from photo_votes v where v.photo_id = p.id and v.guest_id = ${viewerParam}) as voted
      from photos p left join guests g on g.id = p.guest_id
      where ${where} order by ${order} limit ${limit + 1} offset ${offset}`,

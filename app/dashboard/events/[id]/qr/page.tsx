@@ -3,7 +3,6 @@ import QRCode from "qrcode";
 import { Logo } from "@/components/brand";
 import { PrintButton } from "@/components/print-button";
 import { requireUser } from "@/lib/auth";
-import { APP_URL } from "@/lib/env";
 import { getManagedEvent, guestUrl } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 
@@ -16,7 +15,7 @@ export default async function QrCard({ params }: { params: Promise<{ id: string 
   const user = await requireUser();
   const e = await getManagedEvent(id, user);
   if (!e || !e.paid_at) notFound();
-  const url = guestUrl(APP_URL, e.slug);
+  const url = guestUrl(e.slug);
   const svg = await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1f2937", light: "#ffffff" } });
   return (
     <div className="grid justify-items-center gap-6 print:block">

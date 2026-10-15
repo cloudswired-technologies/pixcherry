@@ -79,7 +79,8 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await page.getByRole("link", { name: "Get your QR code" }).click();
   await expect(page.getByAltText("QR code for the guest page")).toBeVisible();
   const guestUrl = (await page.locator("div.font-mono").first().innerText()).trim();
-  expect(guestUrl).toMatch(/\/e\/[a-z0-9]{10}$/);
+  // Link made from the event name (aina-hakim-…), unless the organiser typed one.
+  expect(guestUrl).toMatch(/\/e\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/);
   const slug = guestUrl.split("/e/")[1];
   const [ev] = await sql("select id, deletion_at, plan_snapshot->>'code' as plan from events where slug = $1", [slug]);
   expect(ev.plan).toBe("basic");

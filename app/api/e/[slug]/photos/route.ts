@@ -10,7 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const e = await getEventBySlug((await params).slug);
   if (!e || !e.paid_at || e.purged_at) return NextResponse.json({ error: "Event not found." }, { status: 404 });
-  if (!(await rateLimit("gallery", 240, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
+  if (!(await rateLimit("gallery", 1500, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
   const u = new URL(req.url);
   const guest = await currentGuest(e.id);
   const o = u.searchParams.get("order");

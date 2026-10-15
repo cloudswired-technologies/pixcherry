@@ -1,17 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type FormEvent } from "react";
 import confetti from "canvas-confetti";
-import { ArrowRight, Calendar, Camera, ChevronLeft, Download, ImagePlus, Images, Loader2, MapPin, MessageCircleHeart, MoreHorizontal, PartyPopper, Share2, Sparkles, User, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Calendar,
+  Camera,
+  ChevronLeft,
+  Download,
+  ImagePlus,
+  Images,
+  Loader2,
+  MapPin,
+  MessageCircleHeart,
+  MonitorPlay,
+  MoreHorizontal,
+  PartyPopper,
+  Pencil,
+  QrCode,
+  Share2,
+  Smartphone,
+  Sparkles,
+  User,
+  Users,
+} from "lucide-react";
 import { Logo } from "@/components/brand";
 import { Turnstile } from "@/components/turnstile";
 import type { Quality } from "@/lib/client/compress";
 import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
 import type { GalleryPhoto } from "@/lib/photos";
-import { join, type JoinState } from "./actions";
+import { join, rename, type JoinState } from "./actions";
+import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
 import { DisposableCamera } from "./camera";
+import { InstallGuide, useInstall } from "./install";
 import {
   AlbumCard,
   Avatar,
@@ -20,12 +43,13 @@ import {
   PeopleGrid,
   PeopleRow,
   Sheet,
-  TopSnappers,
   UploadReview,
   WishForm,
   WishesPanel,
+  initial,
   usePeople,
   type MissionInfo,
+  type PendingTile,
   type PersonItem,
   type Snapper,
   type TopPhoto,
@@ -33,11 +57,19 @@ import {
 import { useGallery, type GalleryFilter } from "./use-gallery";
 import { Viewer } from "./viewer";
 
-type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean };
+type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; comments: boolean; slideshow: boolean };
 type TagAlbum = { tag: string; count: number; cover: string | null };
+type Joined = { id: string; name: string | null; uploaded: number; blocked: boolean };
 
 type Props = {
   slug: string;
+  /** Path of this album on the current host: /aina-hakim (guest host) or /e/aina-hakim. */
+  base: string;
+  /** Full link guests share (and the QR code). */
+  shareUrl: string;
+  qrSvg: string;
+  /** Signed guest session for the home-screen app's start link. */
+  resumeKey: string | null;
   event: {
     name: string;
     description: string;
@@ -54,7 +86,7 @@ type Props = {
   };
   features: Features;
   canUpload: boolean;
-  guest: { id: string; name: string | null; uploaded: number; blocked: boolean } | null;
+  guest: Joined | null;
   limits: { perGuest: number; maxBytes: number };
   quality: Quality;
   initial: { photos: GalleryPhoto[]; next: string | null; count: number };
@@ -66,16 +98,28 @@ type Props = {
   siteKey: string | null;
 };
 
-type Tab = "highlights" | "people" | "all" | "wishes";
+type Tab = "highlights" | "missions" | "people" | "all" | "top" | "wishes";
 /** A filtered photo list opened from Highlights / People. */
 type Album = { title: string; subtitle?: string; filter: GalleryFilter; person?: PersonItem } | null;
 type Pending = { kind: "camera" | "upload" | "wish" | "join"; mission?: string | null } | null;
 type Stats = { photos: number; guests: number; joined: number; wishes: number; topSnappers: Snapper[]; topPhotos: TopPhoto[]; missions: MissionInfo[]; missionsDone: string[]; tagAlbums: TagAlbum[] };
 
 const ALL: GalleryFilter = { order: "new", guest: null, mission: null };
+const CHEER = ["#e91d48", "#ffd166", "#ffffff", "#16a34a"];
+
+function store(k: string, v?: string) {
+  try {
+    if (v === undefined) return localStorage.getItem(k);
+    localStorage.setItem(k, v);
+  } catch {
+    /* private mode */
+  }
+  return null;
+}
 
 export function GuestApp(p: Props) {
   const [joined, setJoined] = useState(p.guest);
+  const [key, setKey] = useState(p.resumeKey);
   const [tab, setTab] = useState<Tab>(p.features.tags || (p.features.missions && p.missions.length) ? "highlights" : "all");
   const [album, setAlbum] = useState<Album>(null);
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
@@ -87,7 +131,7 @@ export function GuestApp(p: Props) {
   const [wishKey, setWishKey] = useState(0);
   const [peopleKey, setPeopleKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [sheet, setSheet] = useState<"more" | "qr" | "you" | "install" | null>(null);
   const [picks, setPicks] = useState<{ key: string; file: File; url: string }[]>([]);
   const [pickMissionId, setPickMissionId] = useState<string | null>(null);
   // First paint uses numbers computed on the server (no "0 guests" flash), then polls.
@@ -95,8 +139,10 @@ export function GuestApp(p: Props) {
   const [pickTags, setPickTags] = useState<string[]>([]);
   const pick = useRef<HTMLInputElement>(null);
   const statsRef = useRef(p.initial.count);
+  const doneRef = useRef(new Set(p.missionsDone));
   const tabsRef = useRef<HTMLDivElement>(null);
   const f = p.features;
+  const hasMissions = f.missions && stats.missions.length > 0;
   // Custom branding: the organiser's colour replaces the cherry everywhere on this page.
   const style = { "--accent": p.event.accent, "--brand": p.event.accent, "--brand-strong": p.event.accent } as CSSProperties;
 
@@ -104,16 +150,38 @@ export function GuestApp(p: Props) {
   const albumFilter = album?.filter ?? { order: "top" as const, guest: null, mission: null };
   const albumGallery = useGallery(p.slug, albumFilter);
   const people = usePeople(p.slug, peopleKey);
+  const board = useMissionBoard(p.slug, hasMissions && tab === "missions", stats.photos);
   const missionMap = useMemo(() => new Map(stats.missions.map((m) => [m.id, m])), [stats.missions]);
   const done = useMemo(() => new Set(stats.missionsDone), [stats.missionsDone]);
+  const master = hasMissions && stats.missions.every((m) => done.has(m.id));
+  const install = useInstall();
+
+  const flash = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
   const loadStats = useCallback(async () => {
     const r = await fetch(`/api/e/${p.slug}/stats`).catch(() => null);
     if (!r?.ok) return;
     const st = (await r.json()) as Stats;
     statsRef.current = st.photos;
+    // Cheer when one of my missions just got done (and louder when that was the last one).
+    const before = doneRef.current;
+    const fresh = st.missionsDone.filter((id) => !before.has(id));
+    doneRef.current = new Set(st.missionsDone);
+    if (fresh.length && st.missions.length) {
+      const allDone = st.missions.every((m) => doneRef.current.has(m.id));
+      if (allDone) {
+        confetti({ particleCount: 220, spread: 110, origin: { y: 0.6 }, colors: ["#ffb703", "#fb8500", ...CHEER], disableForReducedMotion: true });
+        flash(`🏆 Mission Master! You finished all ${st.missions.length} missions`);
+      } else {
+        const m = st.missions.find((x) => x.id === fresh[0]);
+        flash(`✅ Mission complete: ${m?.title ?? "nice!"}`);
+      }
+    }
     setStats(st);
-  }, [p.slug]);
+  }, [p.slug, flash]);
   useEffect(() => {
     const first = setTimeout(loadStats, 0);
     const t = setInterval(() => !document.hidden && loadStats(), 20_000);
@@ -122,11 +190,6 @@ export function GuestApp(p: Props) {
       clearInterval(t);
     };
   }, [loadStats]);
-
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  }, []);
 
   const up = useUploader({
     slug: p.slug,
@@ -145,10 +208,64 @@ export function GuestApp(p: Props) {
     },
     onIdle: (ok) => {
       if (!ok) return;
-      confetti({ particleCount: 110, spread: 75, origin: { y: 0.8 }, colors: ["#e91d48", "#ffd166", "#ffffff", "#16a34a"], disableForReducedMotion: true });
+      confetti({ particleCount: 110, spread: 75, origin: { y: 0.8 }, colors: CHEER, disableForReducedMotion: true });
       flash(ok === 1 ? `Shared! You're snap #${statsRef.current + 1} 🎉` : `${ok} photos shared! 🎉`);
     },
   });
+
+  // Photos just shared show straight away as tiles until the real photo is in the gallery.
+  const inGallery = useMemo(() => new Set(all.photos.map((x) => x.id)), [all.photos]);
+  const [now, setNow] = useState(0);
+  const pending: PendingTile[] = up.items.filter((i) => i.status !== "error" && !(i.photoId && inGallery.has(i.photoId)) && !(i.doneAt && now - i.doneAt > 60_000));
+  const processing = pending.some((i) => i.status === "done");
+  const pollAll = all.poll;
+  useEffect(() => {
+    if (!processing) return;
+    const t = setInterval(() => {
+      pollAll();
+      setNow(Date.now());
+    }, 2500);
+    return () => clearInterval(t);
+  }, [processing, pollAll]);
+
+  // The home-screen app opens with ?k=…: sign this browser in as that guest once.
+  useEffect(() => {
+    const k = new URLSearchParams(location.search).get("k");
+    if (!k) return;
+    if (joined) history.replaceState(history.state, "", location.pathname);
+    else location.replace(`${p.base}/resume?k=${encodeURIComponent(k)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The installed app should start signed in as this guest.
+  useEffect(() => {
+    if (!key) return;
+    document.querySelector('link[rel="manifest"]')?.setAttribute("href", `${p.base}/manifest.webmanifest?k=${encodeURIComponent(key)}`);
+  }, [key, p.base]);
+
+  // On a phone, once they've joined: suggest adding the album to the home screen (once per album).
+  // After joining, so the installed app starts signed in as them.
+  const isIn = !!joined;
+  useEffect(() => {
+    const pl = install.platform;
+    if (!isIn || !pl || pl === "standalone" || pl === "desktop" || store(`pc-install-${p.slug}`)) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      // Wait until nothing else is on screen (join sheet, camera, review…).
+      if (document.querySelector('[role="dialog"]') && ++tries < 40) return;
+      clearInterval(t);
+      store(`pc-install-${p.slug}`, "1");
+      setSheet((s) => s ?? "install");
+    }, 2000);
+    return () => clearInterval(t);
+  }, [install.platform, p.slug, isIn]);
+
+  // iOS "Add to Home Screen" saves the current address, so carry the session in it while the guide is open.
+  useEffect(() => {
+    if (sheet !== "install" || install.platform !== "ios" || !key) return;
+    history.replaceState(history.state, "", `${location.pathname}?k=${encodeURIComponent(key)}`);
+    return () => history.replaceState(history.state, "", location.pathname);
+  }, [sheet, install.platform, key]);
 
   const canShoot = p.canUpload && !joined?.blocked;
   const start = useCallback(
@@ -166,8 +283,9 @@ export function GuestApp(p: Props) {
   );
 
   const onJoined = useCallback(
-    (g: { id: string; name: string | null; uploaded: number }) => {
-      setJoined({ ...g, blocked: false });
+    (g: { id: string; name: string | null; uploaded: number; key: string | null }) => {
+      setJoined({ id: g.id, name: g.name, uploaded: g.uploaded, blocked: false });
+      if (g.key) setKey(g.key);
       const next = joinFor;
       setJoinFor(null);
       if (!next || next.kind === "join") return;
@@ -176,7 +294,7 @@ export function GuestApp(p: Props) {
         else if (next.kind === "camera" && f.camera) {
           setMission(next.mission ?? null);
           setCameraOpen(true);
-        } else flash("You're in! Tap Upload to pick your photos 📸"); // iOS blocks file pickers not opened by a tap
+        } else if (next.kind === "upload") flash("You're in! Tap Upload to pick your photos 📸"); // iOS blocks file pickers not opened by a tap
       }, 50);
     },
     [joinFor, f.camera, flash],
@@ -197,6 +315,11 @@ export function GuestApp(p: Props) {
   );
 
   const scrollToTabs = useCallback(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), []);
+  const goTab = (t: Tab) => {
+    setAlbum(null);
+    setTab(t);
+    scrollToTabs();
+  };
   const openAlbum = (a: NonNullable<Album>) => {
     setAlbum(a);
     scrollToTabs();
@@ -210,6 +333,7 @@ export function GuestApp(p: Props) {
   };
   const openTop = () => openAlbum({ title: "Most loved", subtitle: "The photos guests hearted most", filter: { order: "top", guest: null, mission: null } });
   const myPhotos = () => joined && openAlbum({ title: "My photos", filter: { order: "new", guest: joined.id, mission: null } });
+  const snapMission = (id: string) => (canShoot ? start(f.camera ? "camera" : "upload", id) : openMission(missionMap.get(id)!));
 
   const addPicks = (list: FileList) => {
     const add = Array.from(list).map((file) => ({ key: `${Date.now()}-${Math.random().toString(36).slice(2)}`, file, url: URL.createObjectURL(file) }));
@@ -223,6 +347,9 @@ export function GuestApp(p: Props) {
     setPickTags([]);
     picks.forEach((x) => URL.revokeObjectURL(x.url));
     setPicks([]);
+    // Show the newest-first gallery, where the just-shared photos appear as uploading tiles.
+    setOrder("new");
+    goTab("all");
   };
 
   const shareCard = async () => {
@@ -260,17 +387,45 @@ export function GuestApp(p: Props) {
   const failed = up.items.filter((i) => i.status === "error");
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "highlights", label: "Highlights", show: true },
-    { id: "people", label: "By People", show: true },
+    { id: "missions", label: "Missions", show: hasMissions },
+    { id: "people", label: "People", show: true },
     { id: "all", label: "All Photos", show: true },
+    { id: "top", label: "Top Snappers", show: f.voting },
     { id: "wishes", label: "Wishes", show: f.wishes },
   ];
+  // Highlights albums, all the same size: Most loved, then hashtags, then missions.
+  type AlbumTile = { k: string; title: string; emoji: string | null; sub: string; cover: string | null };
+  const albums: AlbumTile[] = [
+    ...(f.voting && stats.topPhotos.length ? [{ k: "top", title: "Most loved", emoji: null, sub: `${stats.topPhotos[0].votes} ❤️ on the top photo`, cover: stats.topPhotos[0].md }] : []),
+    ...(f.tags ? stats.tagAlbums.map((a) => ({ k: `t:${a.tag}`, title: `#${a.tag}`, emoji: null, sub: `${a.count} photo${a.count === 1 ? "" : "s"}`, cover: a.cover })) : []),
+    ...(hasMissions
+      ? stats.missions.filter((m) => m.count).map((m) => ({ k: `m:${m.id}`, title: m.title, emoji: m.emoji ?? "🎯", sub: `${m.count} photo${m.count === 1 ? "" : "s"}`, cover: m.cover ?? null }))
+      : []),
+  ];
+  const openTile = (k: string) => {
+    if (k === "top") return openTop();
+    if (k.startsWith("t:")) return openTag(k.slice(2));
+    const m = missionMap.get(k.slice(2));
+    if (m) openMission(m);
+  };
 
   return (
     <div style={style} className="min-h-dvh bg-paper pb-28">
       {/* ------------------------------------------------------------ top bar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           {p.event.logo ? <img src={p.event.logo} alt="" className="h-8 w-auto" /> : <Logo className="text-lg" />}
+          {joined ? (
+            <button type="button" onClick={() => setSheet("you")} className="flex min-w-0 items-center gap-2 rounded-full bg-muted py-1 pl-1 pr-3 text-sm font-semibold" aria-label={`You: ${joined.name ?? "Guest"}`}>
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">{initial(joined.name)}</span>
+              <span className="min-w-0 max-w-32 truncate">{joined.name ?? "You"}</span>
+              {master ? <span title="Mission Master">🏆</span> : null}
+            </button>
+          ) : p.canUpload ? (
+            <button type="button" onClick={() => setJoinFor({ kind: "join" })} className="rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow-cherry">
+              Join
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -349,25 +504,30 @@ export function GuestApp(p: Props) {
         </section>
       ) : null}
 
-      {/* ------------------------------------------------------------ tabs */}
+      {/* ------------------------------------------------------------ tabs (scroll sideways on small phones) */}
       <div ref={tabsRef} className="scroll-mt-14" />
-      <nav className="sticky top-14 z-20 mt-4 border-b border-border bg-paper/95 backdrop-blur">
-        <div className="no-scrollbar mx-auto flex max-w-3xl gap-1 overflow-x-auto px-3">
-          {tabs
-            .filter((t) => t.show)
-            .map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  setAlbum(null);
-                  setTab(t.id);
-                }}
-                className={`-mb-px shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${tab === t.id && !album ? "border-brand text-brand" : "border-transparent text-muted-foreground"}`}
-              >
-                {t.label}
-              </button>
-            ))}
+      <nav className="sticky top-14 z-20 mt-4 border-b border-border bg-paper/95 backdrop-blur" aria-label="Sections">
+        <div className="relative mx-auto max-w-3xl">
+          <div className="no-scrollbar flex gap-1 overflow-x-auto px-3 pr-8">
+            {tabs
+              .filter((t) => t.show)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={(e) => {
+                    setAlbum(null);
+                    setTab(t.id);
+                    e.currentTarget.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+                  }}
+                  aria-current={tab === t.id && !album ? "page" : undefined}
+                  className={`-mb-px shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${tab === t.id && !album ? "border-brand text-brand" : "border-transparent text-muted-foreground"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-paper to-transparent" aria-hidden />
         </div>
       </nav>
 
@@ -384,7 +544,7 @@ export function GuestApp(p: Props) {
                 {album.subtitle ? <p className="text-sm text-muted-foreground">{album.subtitle}</p> : null}
               </div>
             </div>
-            {album.person && f.missions && stats.missions.length ? (
+            {album.person && hasMissions ? (
               <div className="no-scrollbar mb-3 flex gap-2 overflow-x-auto px-2">
                 <button type="button" onClick={() => setAlbum({ ...album, filter: { ...album.filter, mission: null } })} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${album.filter.mission ? "bg-white" : "bg-brand text-white"}`}>
                   All ({album.person.count})
@@ -401,7 +561,7 @@ export function GuestApp(p: Props) {
         ) : tab === "highlights" ? (
           <div className="grid gap-4 px-2">
             {p.event.ended ? (
-              <Link href={`/e/${p.slug}/recap`} className="flex items-center gap-3 rounded-3xl bg-ink p-4 text-white shadow-lift">
+              <Link href={`${p.base}/recap`} className="flex items-center gap-3 rounded-3xl bg-ink p-4 text-white shadow-lift">
                 <span className="text-3xl">✨</span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">The recap is ready</span>
@@ -410,70 +570,69 @@ export function GuestApp(p: Props) {
                 <ArrowRight className="size-5 shrink-0" aria-hidden />
               </Link>
             ) : null}
-            {f.missions ? <MissionsProgress missions={stats.missions} done={done} canShoot={canShoot} onPick={(id) => (canShoot ? start(f.camera ? "camera" : "upload", id) : openMission(missionMap.get(id)!))} /> : null}
-            {f.voting && stats.topPhotos.length ? <AlbumCard title="Most loved" subtitle={`${stats.topPhotos[0].votes} ❤️ on the top photo`} cover={stats.topPhotos[0].md} onClick={openTop} tall /> : null}
-            {f.tags ? (
-              stats.tagAlbums.length ? (
-                <section>
-                  <h3 className="mb-3 px-1 font-bold">Albums</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {stats.tagAlbums.map((a, i) => (
-                      <div key={a.tag} className={i === 0 ? "col-span-2" : ""}>
-                        <AlbumCard title={`#${a.tag}`} subtitle={`${a.count} photo${a.count === 1 ? "" : "s"}`} cover={a.cover} onClick={() => openTag(a.tag)} tall={i === 0} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : (
-                <section className="rounded-3xl border-2 border-dashed border-brand/25 bg-white p-5 text-center">
-                  <div className="text-3xl">#️⃣</div>
-                  <h3 className="mt-1 font-bold">Albums appear here</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    When you share a photo, tap a hashtag like <strong className="text-brand">#{p.suggestedTags[0] ?? "reception"}</strong> or <strong className="text-brand">#{p.suggestedTags[1] ?? "family"}</strong> — every hashtag becomes an album.
-                  </p>
-                </section>
-              )
-            ) : null}
-            {f.missions && stats.missions.some((m) => m.count) ? (
-              <div className="grid grid-cols-2 gap-3">
-                {stats.missions
-                  .filter((m) => m.count)
-                  .map((m, i) => (
-                    <div key={m.id} className={i === 0 ? "col-span-2" : ""}>
-                      <AlbumCard title={m.title} emoji={m.emoji} subtitle={`${m.count} photo${m.count === 1 ? "" : "s"}`} cover={m.cover ?? null} onClick={() => openMission(m)} tall={i === 0} />
-                    </div>
+            {hasMissions ? <MissionsProgress missions={stats.missions} done={done} canShoot={canShoot} onPick={snapMission} onAll={() => goTab("missions")} /> : null}
+            {albums.length ? (
+              <section>
+                <h3 className="mb-3 px-1 font-bold">Albums</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {albums.map((a) => (
+                    <AlbumCard key={a.k} title={a.title} emoji={a.emoji} subtitle={a.sub} cover={a.cover} onClick={() => openTile(a.k)} />
                   ))}
-              </div>
+                </div>
+              </section>
+            ) : null}
+            {f.tags && !stats.tagAlbums.length ? (
+              <section className="rounded-3xl border-2 border-dashed border-brand/25 bg-white p-5 text-center">
+                <div className="text-3xl">#️⃣</div>
+                <h3 className="mt-1 font-bold">Hashtag albums appear here</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  When you share a photo, tap a hashtag like <strong className="text-brand">#{p.suggestedTags[0] ?? "reception"}</strong> or <strong className="text-brand">#{p.suggestedTags[1] ?? "family"}</strong> — every hashtag becomes an album.
+                </p>
+              </section>
             ) : null}
             {people?.length ? (
               <section className="rounded-3xl bg-white p-4 shadow-soft">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-bold">Browse by people</h3>
-                  <button type="button" onClick={() => setTab("people")} className="text-sm font-semibold text-brand">
+                  <button type="button" onClick={() => goTab("people")} className="text-sm font-semibold text-brand">
                     See all
                   </button>
                 </div>
                 <PeopleRow people={people} onOpen={openPerson} />
               </section>
             ) : null}
-            {f.voting ? <TopSnappers snappers={stats.topSnappers} /> : null}
             <section>
               <div className="mb-3 flex items-center justify-between px-1">
                 <h3 className="font-bold">Latest moments</h3>
-                <button type="button" onClick={() => setTab("all")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand">
+                <button type="button" onClick={() => goTab("all")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand">
                   All photos <ArrowRight className="size-4" aria-hidden />
                 </button>
               </div>
-              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
+              <Masonry gallery={{ ...all, photos: all.photos.slice(0, 12), next: null }} pending={pending} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
             </section>
           </div>
+        ) : tab === "missions" && hasMissions ? (
+          <MissionsPanel missions={stats.missions} done={done} board={board} me={joined?.id ?? null} canShoot={canShoot} onSnap={snapMission} onOpen={openMission} />
         ) : tab === "people" ? (
           <div className="px-2">
             <h2 className="mb-1 text-2xl font-extrabold">Browse by people</h2>
             <p className="mb-4 text-sm text-muted-foreground">See who captured the moments.</p>
             <PeopleGrid people={people} onOpen={openPerson} />
           </div>
-        ) : tab === "all" ? (
+        ) : tab === "top" && f.voting ? (
+          <TopPanel
+            snappers={stats.topSnappers}
+            topPhotos={stats.topPhotos}
+            me={joined?.id ?? null}
+            voting={f.voting}
+            onTop={openTop}
+            onPerson={(s) => openPerson(people?.find((x) => x.id === s.id) ?? { id: s.id, name: s.name, count: s.count, cover: null, hearts: 0 })}
+          />
+        ) : tab === "wishes" && f.wishes ? (
+          <div className="px-2">
+            <WishesPanel slug={p.slug} canWrite={!joined?.blocked && p.canUpload} onWrite={() => start("wish")} refreshKey={wishKey} />
+          </div>
+        ) : (
           <section>
             <div className="mb-3 flex items-end justify-between gap-2 px-2">
               <div>
@@ -489,20 +648,16 @@ export function GuestApp(p: Props) {
                 </select>
               </label>
             </div>
-            <Masonry gallery={all} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
+            <Masonry gallery={all} pending={order === "new" ? pending : undefined} missions={missionMap} onOpen={(i) => setOpen({ list: "all", i })} empty="No photos yet — be the first to snap one!" />
           </section>
-        ) : (
-          <div className="px-2">
-            <WishesPanel slug={p.slug} canWrite={!joined?.blocked && p.canUpload} onWrite={() => start("wish")} refreshKey={wishKey} />
-          </div>
         )}
       </main>
 
       {p.event.poweredBy ? (
         <footer className="mt-12 flex justify-center">
-          <Link href="/" className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+          <a href="https://pixcherry.com" className="inline-flex items-center gap-2 text-xs text-muted-foreground">
             Made with <Logo className="text-xs" />
-          </Link>
+          </a>
         </footer>
       ) : null}
 
@@ -518,29 +673,32 @@ export function GuestApp(p: Props) {
               Snap
             </button>
           ) : (
-            <BarButton icon={Images} label="Gallery" onClick={() => (setAlbum(null), setTab("all"), scrollToTabs())} />
+            <BarButton icon={Images} label="Gallery" onClick={() => goTab("all")} />
           )}
-          <BarButton icon={MessageCircleHeart} label="Wishes" onClick={() => (f.wishes ? (canShoot ? start("wish") : (setAlbum(null), setTab("wishes"), scrollToTabs())) : undefined)} disabled={!f.wishes} />
-          <BarButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
+          <BarButton icon={MessageCircleHeart} label="Wishes" onClick={() => (f.wishes ? (canShoot ? start("wish") : goTab("wishes")) : undefined)} disabled={!f.wishes} />
+          <BarButton icon={MoreHorizontal} label="More" onClick={() => setSheet("more")} />
         </div>
       </nav>
 
-      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+      <Sheet open={sheet === "more"} onClose={() => setSheet(null)} title="More">
         <div className="grid gap-2">
+          <MoreItem icon={QrCode} label="Show QR code" onClick={() => setSheet("qr")} />
+          {install.platform && install.platform !== "standalone" ? <MoreItem icon={Smartphone} label="Add to home screen" onClick={() => setSheet("install")} /> : null}
+          {f.slideshow ? <MoreItem icon={MonitorPlay} label="Play slideshow" href={`${p.base}/slideshow`} /> : null}
           <MoreItem
             icon={Sparkles}
             label="Share my story card"
             onClick={() => {
-              setMoreOpen(false);
+              setSheet(null);
               shareCard();
             }}
           />
-          <MoreItem icon={PartyPopper} label="Event recap" href={`/e/${p.slug}/recap`} />
+          <MoreItem icon={PartyPopper} label="Event recap" href={`${p.base}/recap`} />
           <MoreItem
             icon={User}
             label="My photos"
             onClick={() => {
-              setMoreOpen(false);
+              setSheet(null);
               if (joined) myPhotos();
               else setJoinFor({ kind: "join" });
             }}
@@ -550,12 +708,65 @@ export function GuestApp(p: Props) {
             icon={Share2}
             label="Share this album"
             onClick={() => {
-              setMoreOpen(false);
-              if (navigator.share) navigator.share({ title: p.event.name, url: location.href }).catch(() => {});
-              else navigator.clipboard?.writeText(location.href).then(() => flash("Link copied ✨"));
+              setSheet(null);
+              if (navigator.share) navigator.share({ title: p.event.name, url: p.shareUrl }).catch(() => {});
+              else navigator.clipboard?.writeText(p.shareUrl).then(() => flash("Link copied ✨"));
             }}
           />
         </div>
+      </Sheet>
+
+      <Sheet open={sheet === "qr"} onClose={() => setSheet(null)} title="Scan to join">
+        <div className="grid justify-items-center gap-3 text-center">
+          <div className="w-full max-w-64 rounded-3xl bg-white p-3 shadow-soft ring-1 ring-border [&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: p.qrSvg }} />
+          <div>
+            <div className="font-bold">{p.event.name}</div>
+            <div className="text-sm font-semibold text-brand">{p.shareUrl.replace(/^https?:\/\//, "")}</div>
+          </div>
+          <p className="text-sm text-muted-foreground">Show this to friends so they can join and share their photos too.</p>
+        </div>
+      </Sheet>
+
+      <Sheet open={sheet === "install"} onClose={() => setSheet(null)} title="📲 Keep this album on your phone">
+        {install.platform ? (
+          <InstallGuide
+            platform={install.platform}
+            canPrompt={install.canPrompt}
+            link={p.shareUrl}
+            onInstall={async () => {
+              if (await install.install()) {
+                setSheet(null);
+                flash("Added! Find PixCherry on your home screen 📲");
+              }
+            }}
+            onDone={() => setSheet(null)}
+          />
+        ) : null}
+      </Sheet>
+
+      <Sheet open={sheet === "you" && !!joined} onClose={() => setSheet(null)} title="You">
+        {joined ? (
+          <YouPanel
+            slug={p.slug}
+            joined={joined}
+            onRenamed={(name) => {
+              setJoined({ ...joined, name });
+              setPeopleKey((k) => k + 1);
+              flash("Name updated ✨");
+            }}
+            shotsLeft={canShoot ? shotsLeft : null}
+            missions={hasMissions ? { done: stats.missions.filter((m) => done.has(m.id)).length, total: stats.missions.length } : null}
+            onMyPhotos={() => {
+              setSheet(null);
+              myPhotos();
+            }}
+            onMissions={() => {
+              setSheet(null);
+              goTab("missions");
+            }}
+            onInstall={install.platform && install.platform !== "standalone" ? () => setSheet("install") : null}
+          />
+        ) : null}
       </Sheet>
 
       <input
@@ -571,7 +782,7 @@ export function GuestApp(p: Props) {
       />
 
       {toast ? (
-        <div className="fixed inset-x-0 bottom-28 z-40 flex justify-center px-4" role="status">
+        <div className="fixed inset-x-0 bottom-28 z-[80] flex justify-center px-4" role="status">
           <div className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lift [animation:pc-pop_3.5s_ease_forwards]">{toast}</div>
         </div>
       ) : null}
@@ -589,7 +800,7 @@ export function GuestApp(p: Props) {
           shotsLeft={shotsLeft}
           quality={p.quality}
           maxBytes={p.limits.maxBytes}
-          missions={f.missions ? stats.missions : []}
+          missions={hasMissions ? stats.missions : []}
           mission={mission}
           onMission={setMission}
           caption={p.event.name}
@@ -615,16 +826,12 @@ export function GuestApp(p: Props) {
           }
           onAdd={() => pick.current?.click()}
           onShare={sharePicks}
-          missions={f.missions ? stats.missions : []}
+          missions={hasMissions ? stats.missions : []}
           mission={pickMissionId}
           onMission={setPickMissionId}
           left={shotsLeft}
           tags={f.tags ? { suggested: p.suggestedTags, value: pickTags, onChange: setPickTags } : null}
         />
-      </Sheet>
-
-      <Sheet open={!!joinFor} onClose={() => setJoinFor(null)} title="Join the album">
-        <JoinForm slug={p.slug} askName={p.event.askName} siteKey={p.siteKey} onJoined={onJoined} canUpload={p.canUpload} />
       </Sheet>
 
       <Sheet open={wishOpen} onClose={() => setWishOpen(false)} title="💌 Write a wish">
@@ -656,6 +863,20 @@ export function GuestApp(p: Props) {
           voting={f.voting}
           onVote={vote}
           missions={missionMap}
+          comments={
+            f.comments
+              ? {
+                  joined: !!joined,
+                  canWrite: !joined?.blocked,
+                  myName: joined?.name ?? null,
+                  onNeedJoin: () => setJoinFor({ kind: "join" }),
+                  onCount: (id, n) => {
+                    all.patchPhoto(id, { comments: n });
+                    albumGallery.patchPhoto(id, { comments: n });
+                  },
+                }
+              : null
+          }
           onTag={(t) => {
             history.back();
             setTimeout(() => openTag(t), 0);
@@ -669,6 +890,11 @@ export function GuestApp(p: Props) {
           }}
         />
       ) : null}
+
+      {/* After the viewer so joining to comment shows on top of it. */}
+      <Sheet open={!!joinFor} onClose={() => setJoinFor(null)} title="Join the album" top>
+        <JoinForm slug={p.slug} askName={p.event.askName} siteKey={p.siteKey} onJoined={onJoined} canUpload={p.canUpload} />
+      </Sheet>
     </div>
   );
 }
@@ -683,34 +909,160 @@ function JoinForm({
   slug: string;
   askName: boolean;
   siteKey: string | null;
-  onJoined: (j: { id: string; name: string | null; uploaded: number }) => void;
+  onJoined: (j: NonNullable<JoinState["joined"]>) => void;
   canUpload: boolean;
 }) {
-  const [state, run, busy] = useActionState(join.bind(null, slug), {} as JoinState);
-  const cb = useRef(onJoined);
+  // Controlled fields + a manual submit: a failed attempt (e.g. the bot check not
+  // finished yet) must never wipe the name the guest already typed.
+  const [name, setName] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
+  const [widget, setWidget] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [match, setMatch] = useState<JoinState["match"] | null>(null);
+  const [busy, startBusy] = useTransition();
   useEffect(() => {
-    cb.current = onJoined;
-  });
-  useEffect(() => {
-    if (state.joined) cb.current(state.joined);
-  }, [state.joined]);
+    if (!siteKey) return;
+    // If the check never finishes (blocked script), let them try anyway; the server decides.
+    const t = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(t);
+  }, [siteKey, widget]);
   if (!canUpload) return <p className="text-sm text-muted-foreground">This album is closed for new photos and wishes.</p>;
+  const waiting = !!siteKey && !token && !slow;
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    // The "Yes, that's me" / "No" buttons carry name="same".
+    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    setError(null);
+    startBusy(async () => {
+      const r = await join(slug, {}, fd);
+      if (r.joined) return onJoined(r.joined);
+      if (r.match) return setMatch(r.match);
+      setError(r.error ?? "Something went wrong. Please try again.");
+      if (siteKey) {
+        // Tokens are single use: get a fresh one for the next try.
+        setToken(null);
+        setSlow(false);
+        setWidget((w) => w + 1);
+      }
+    });
+  };
   return (
-    <form action={run} className="grid gap-3">
+    <form onSubmit={submit} className="grid gap-3">
       <p className="text-sm text-muted-foreground">One tap and you&apos;re in — no app, no password.</p>
       {askName ? (
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold">Your name</span>
-          <input name="name" maxLength={60} autoComplete="name" autoFocus placeholder="So everyone knows who snapped it" className="h-12 rounded-2xl border border-input bg-background px-4 outline-none focus:border-brand" />
+          <input
+            name="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            autoComplete="name"
+            autoFocus
+            placeholder="So everyone knows who snapped it"
+            className="h-12 rounded-2xl border border-input bg-background px-4 outline-none focus:border-brand"
+          />
         </label>
       ) : null}
-      {siteKey ? <Turnstile siteKey={siteKey} /> : null}
-      {state.error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p> : null}
-      <button disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
-        {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
-        Let&apos;s go 🎉
-      </button>
+      {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} /> : null}
+      {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
+      {match && match.name.toLowerCase() === name.trim().toLowerCase() ? (
+        <div className="grid gap-2 rounded-2xl bg-brand-soft p-4" role="group" aria-label="Welcome back">
+          <p className="text-sm">
+            <strong>Welcome back, {match.name}! 👋</strong> Someone called {match.name} already joined from this phone{match.photos ? ` with ${match.photos} photo${match.photos === 1 ? "" : "s"}` : ""}. Is that you?
+          </p>
+          <button name="same" value={`yes:${match.id}`} disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-white shadow-cherry disabled:opacity-60">
+            {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
+            Yes, continue as {match.name}
+          </button>
+          <button name="same" value="new" disabled={busy || waiting} className="py-1.5 text-sm font-semibold text-muted-foreground">
+            No, I&apos;m someone else
+          </button>
+        </div>
+      ) : (
+        <button disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
+          {busy || waiting ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
+          {waiting ? "Just a moment…" : "Let's go 🎉"}
+        </button>
+      )}
     </form>
+  );
+}
+
+function YouPanel({
+  slug,
+  joined,
+  onRenamed,
+  shotsLeft,
+  missions,
+  onMyPhotos,
+  onMissions,
+  onInstall,
+}: {
+  slug: string;
+  joined: Joined;
+  onRenamed: (name: string | null) => void;
+  shotsLeft: number | null;
+  missions: { done: number; total: number } | null;
+  onMyPhotos: () => void;
+  onMissions: () => void;
+  onInstall: (() => void) | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(joined.name ?? "");
+  const [busy, startBusy] = useTransition();
+  const save = () =>
+    startBusy(async () => {
+      const r = await rename(slug, name);
+      setEditing(false);
+      onRenamed(r ?? null);
+    });
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-center gap-4">
+        <span className="grid size-16 shrink-0 place-items-center rounded-full bg-brand text-2xl font-bold text-white shadow-soft">{initial(joined.name)}</span>
+        {editing ? (
+          <div className="flex min-w-0 flex-1 gap-2">
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} autoFocus aria-label="Your name" className="h-11 min-w-0 flex-1 rounded-2xl border border-input bg-background px-3 outline-none focus:border-brand" />
+            <button type="button" onClick={save} disabled={busy} className="rounded-full bg-brand px-4 text-sm font-bold text-white disabled:opacity-60">
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : "Save"}
+            </button>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">You&apos;re in as</div>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-xl font-extrabold">{joined.name ?? "Guest"}</span>
+              <button type="button" onClick={() => setEditing(true)} className="grid size-8 shrink-0 place-items-center rounded-full bg-muted" aria-label="Edit name">
+                <Pencil className="size-4" aria-hidden />
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground">Shown next to your photos, wishes and comments.</div>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        {shotsLeft !== null ? (
+          <div className="rounded-2xl bg-background p-3">
+            <div className="text-2xl font-extrabold">{shotsLeft}</div>
+            <div className="text-xs text-muted-foreground">shots left</div>
+          </div>
+        ) : null}
+        {missions ? (
+          <button type="button" onClick={onMissions} className="rounded-2xl bg-background p-3">
+            <div className="text-2xl font-extrabold">
+              {missions.done === missions.total ? "🏆" : `${missions.done}/${missions.total}`}
+            </div>
+            <div className="text-xs text-muted-foreground">{missions.done === missions.total ? "Mission Master" : "missions done"}</div>
+          </button>
+        ) : null}
+      </div>
+      <div className="grid gap-2">
+        <MoreItem icon={User} label="My photos" onClick={onMyPhotos} />
+        {onInstall ? <MoreItem icon={Smartphone} label="Add to home screen" onClick={onInstall} /> : null}
+      </div>
+    </div>
   );
 }
 

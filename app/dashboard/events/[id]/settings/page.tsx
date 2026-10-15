@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
+import { SlugField } from "@/components/slug-field";
+import { GUEST_PREFIX } from "@/lib/env";
 import { Card, Field, Input, Notice, PageHeader, Textarea, Toggle } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { coverUrl, getManagedEvent, logoUrl } from "@/lib/events";
@@ -26,6 +28,9 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
         <ActionForm action={updateEvent.bind(null, e.id)} submit="Save changes">
           <Field label="Event name" htmlFor="name">
             <Input id="name" name="name" required maxLength={120} defaultValue={e.name} />
+          </Field>
+          <Field label="Event link" htmlFor="slug" help="Changing it updates your QR code. The old link keeps working and sends guests to the new one.">
+            <SlugField prefix={GUEST_PREFIX} defaultValue={e.slug} eventId={e.id} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Starts" htmlFor="starts_at">

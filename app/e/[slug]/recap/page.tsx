@@ -4,7 +4,9 @@ import { ArrowRight, Download } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { one, q } from "@/lib/db";
 import { eventStats, listMissions, listTagAlbums, listWishes } from "@/lib/engage";
-import { getEventBySlug, logoUrl } from "@/lib/events";
+import { redirect } from "next/navigation";
+import { APP_URL } from "@/lib/env";
+import { getEventBySlug, guestPath, guestUrl, logoUrl, renamedSlug } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 import { photoKeys, publicUrl } from "@/lib/storage";
 import { CountUp } from "./count-up";
@@ -22,6 +24,10 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 export default async function Recap({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const e = await getEventBySlug(slug);
+  if (!e) {
+    const moved = await renamedSlug(slug);
+    if (moved) redirect(`${guestUrl(moved)}/recap`);
+  }
   if (!e || !e.paid_at || e.purged_at) {
     return (
       <main className="grid min-h-dvh place-items-center px-6 text-center">
@@ -122,7 +128,7 @@ export default async function Recap({ params }: { params: Promise<{ slug: string
             <h2 className="mb-3 text-xl font-extrabold">#️⃣ Albums</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {albums.slice(0, 9).map((a) => (
-                <Link key={a.tag} href={`/e/${e.slug}`} className="relative aspect-square overflow-hidden rounded-3xl bg-ink">
+                <Link key={a.tag} href={guestPath(e.slug)} className="relative aspect-square overflow-hidden rounded-3xl bg-ink">
                   {a.cover ? <img src={a.cover} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" /> : null}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white">
@@ -172,7 +178,7 @@ export default async function Recap({ params }: { params: Promise<{ slug: string
         ) : null}
 
         <section className="grid gap-3 rounded-3xl bg-white p-5 text-center shadow-soft">
-          <Link href={`/e/${e.slug}`} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand font-bold text-white shadow-cherry">
+          <Link href={guestPath(e.slug)} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand font-bold text-white shadow-cherry">
             Open the full album <ArrowRight className="size-5" aria-hidden />
           </Link>
           {f.guest_album_download ? (
@@ -183,7 +189,7 @@ export default async function Recap({ params }: { params: Promise<{ slug: string
         </section>
 
         {!f.hide_powered_by ? (
-          <Link href="/" className="mx-auto grid justify-items-center gap-1 text-center text-sm text-muted-foreground">
+          <Link href={APP_URL} className="mx-auto grid justify-items-center gap-1 text-center text-sm text-muted-foreground">
             <span>Made with</span>
             <Logo className="text-base" />
             <span className="font-semibold text-brand">Create an album for your own event →</span>

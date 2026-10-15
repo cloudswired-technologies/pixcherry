@@ -7,7 +7,6 @@ import { planLines } from "@/components/plan-card";
 import { Badge, Card, LinkButton, Notice, PageHeader, Stat, btn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { q } from "@/lib/db";
-import { APP_URL } from "@/lib/env";
 import { getManagedEvent, guestUrl } from "@/lib/events";
 import { formatBytes, formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
@@ -47,7 +46,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
     );
   }
 
-  const url = guestUrl(APP_URL, e.slug);
+  const url = guestUrl(e.slug);
   const lim = e.cfg.limits;
   const [recent, purchases, warnDays] = await Promise.all([
     listPhotos(e.id, { order: "new", limit: 12 }),
@@ -74,10 +73,10 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
                 <LinkButton href={`/dashboard/events/${e.id}/settings`} variant="outline" size="sm">
                   <Pencil aria-hidden /> Edit details
                 </LinkButton>
-                <a href={`${guestUrl(APP_URL, e.slug)}/recap`} target="_blank" rel="noreferrer" className={btn("outline", "sm")}>
+                <a href={`${guestUrl(e.slug)}/recap`} target="_blank" rel="noreferrer" className={btn("outline", "sm")}>
                   ✨ Recap
                 </a>
-                <a href={guestUrl(APP_URL, e.slug)} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
+                <a href={guestUrl(e.slug)} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
                   <ExternalLink aria-hidden /> Guest page
                 </a>
               </>

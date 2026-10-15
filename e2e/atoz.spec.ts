@@ -188,7 +188,7 @@ test("A to Z on a phone", async ({ browser }) => {
     expect(r.ok(), q).toBe(true);
     expect(((await r.json()) as { photos: unknown[] }).photos, q).toHaveLength(n);
   }
-  await g1.getByRole("button", { name: "By People" }).click();
+  await g1.getByRole("button", { name: "People", exact: true }).click();
   await shot(g1, "guest-people", { bar: true });
   await g1.getByRole("button", { name: /Amir/ }).first().click();
   await expect(g1.getByRole("heading", { name: "Photos by Amir" })).toBeVisible();

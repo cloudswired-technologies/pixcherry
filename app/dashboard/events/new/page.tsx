@@ -1,5 +1,7 @@
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, Input, PageHeader, Textarea } from "@/components/ui";
+import { SlugField } from "@/components/slug-field";
+import { GUEST_PREFIX } from "@/lib/env";
 import { defaultEventTimes, toLocalInput } from "@/lib/format";
 import { createEvent } from "../actions";
 
@@ -16,6 +18,9 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
           <input type="hidden" name="plan" value={plan ?? ""} />
           <Field label="Event name" htmlFor="name" help="Shown to guests, e.g. “Aina & Hakim's Wedding”.">
             <Input id="name" name="name" required maxLength={120} autoFocus />
+          </Field>
+          <Field label="Event link" htmlFor="slug" help="Easy to remember, so guests can type it if they lose the QR code. You can change it later.">
+            <SlugField prefix={GUEST_PREFIX} followName />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Starts" htmlFor="starts_at">

@@ -119,7 +119,7 @@ test("screens", async ({ browser }) => {
   await imagesLoaded(g);
   await g.screenshot({ path: `${OUT}/guest-home.png` });
   await g.screenshot({ path: `${OUT}/guest-gallery.png`, fullPage: true });
-  await g.getByRole("button", { name: "By People" }).click();
+  await g.getByRole("button", { name: "People", exact: true }).click();
   await imagesLoaded(g);
   await g.waitForTimeout(500);
   await g.screenshot({ path: `${OUT}/guest-people.png`, fullPage: true });

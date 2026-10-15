@@ -60,10 +60,11 @@ export async function purgeExpiredEvents() {
 export async function purgeEvent(eventId: string, actorId: string | null, reason: "retention" | "deleted") {
   const objects = await deletePrefix(`ev/${eventId}/`);
   await q("update photos set status = 'deleted' where event_id = $1 and status <> 'deleted'", [eventId]);
-  // Wishes and hearts are guests' personal data: they go with the photos.
+  // Wishes, comments and hearts are guests' personal data: they go with the photos.
   await q("delete from wishes where event_id = $1", [eventId]);
+  await q("delete from photo_comments where event_id = $1", [eventId]);
   await q("delete from photo_votes v using photos p where p.id = v.photo_id and p.event_id = $1", [eventId]);
-  await q("update photos set vote_count = 0 where event_id = $1", [eventId]);
+  await q("update photos set vote_count = 0, comment_count = 0 where event_id = $1", [eventId]);
   await q(
     "update events set purged_at = now(), deletion_at = least(coalesce(deletion_at, now()), now()), photo_count = 0, slot_count = 0, bytes_used = 0, cover_key = null, logo_key = null, uploads_enabled = false where id = $1",
     [eventId],

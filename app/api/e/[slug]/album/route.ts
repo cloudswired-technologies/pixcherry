@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const isOwner = !!user && (user.id === e.owner_id || user.is_admin);
   if (!isOwner) {
     if (!e.cfg.features.guest_album_download || !(await currentGuest(e.id))) return new Response("Only the organiser can download the full album.", { status: 403 });
-    if (!(await rateLimit("album-guest", 3, 3600_000))) return new Response("Please try again later.", { status: 429 });
+    if (!(await rateLimit("album-guest", 10, 3600_000))) return new Response("Please try again later.", { status: 429 });
   }
   return albumResponse(e);
 }

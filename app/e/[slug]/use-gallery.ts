@@ -99,6 +99,8 @@ export function useGallery(slug: string, filter: GalleryFilter, initial?: { phot
     },
     reload: () => load(null, true),
     refreshSoon,
+    /** Checks for new photos right away (used while just-shared photos are processing). */
+    poll,
     patchPhoto,
   };
 }

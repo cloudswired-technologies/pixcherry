@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 import { LOOKS, createRenderer, drawOverlays, polaroid, stampText, type Look, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, playShutter, unlockAudio } from "@/lib/client/camera-sounds";
 import type { Quality } from "@/lib/client/compress";
@@ -58,7 +58,19 @@ export function DisposableCamera({
   const [review, setReview] = useState<Shot | null>(null);
   const [busy, setBusy] = useState(false);
   const [flyKey, setFlyKey] = useState(0);
-  const [last, setLast] = useState<string | null>(null);
+  // This session's shared shots (newest last); tapping the thumbnail opens them like a phone camera roll.
+  const [roll, setRoll] = useState<string[]>([]);
+  const [rollAt, setRollAt] = useState<number | null>(null);
+  const rollOpen = useRef(false);
+  useEffect(() => {
+    rollOpen.current = rollAt !== null;
+  }, [rollAt]);
+  const rollUrls = useRef<string[]>([]);
+  useEffect(() => {
+    rollUrls.current = roll;
+  }, [roll]);
+  useEffect(() => () => rollUrls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+  const last = roll.at(-1) ?? null;
   const [tags, setTags] = useState<string[]>([]);
   const look = LOOKS[lookIdx];
   const lookRef = useRef<Look>(look);
@@ -73,7 +85,11 @@ export function DisposableCamera({
   // Back button / gesture closes the camera instead of leaving the album.
   useEffect(() => {
     history.pushState({ pcCamera: true }, "");
-    const pop = () => onCloseRef.current();
+    const pop = () => {
+      // Back from the camera roll returns to the camera, not the album.
+      if (rollOpen.current) return setRollAt(null);
+      onCloseRef.current();
+    };
     window.addEventListener("popstate", pop);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -237,10 +253,7 @@ export function DisposableCamera({
     playAdvance();
     navigator.vibrate?.([10, 30, 10, 30, 10]);
     onShot(review.file, tags);
-    setLast((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return review.url;
-    });
+    setRoll((r) => [...r, review.url]);
     setFlyKey((k) => k + 1);
     setReview(null);
   };
@@ -364,6 +377,10 @@ export function DisposableCamera({
         ) : null}
       </div>
 
+      {rollAt !== null && roll[rollAt] ? (
+        <RollViewer urls={roll} index={rollAt} onIndex={setRollAt} onClose={() => history.back()} />
+      ) : null}
+
       {/* bottom controls */}
       {review ? (
         <div className="grid gap-3 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4">
@@ -398,9 +415,20 @@ export function DisposableCamera({
             ))}
           </div>
           <div className="flex items-center justify-between px-8">
-            <div className="relative size-14 overflow-hidden rounded-xl border-2 border-white/40 bg-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                if (!last) return;
+                history.pushState({ pcRoll: true }, "");
+                setRollAt(roll.length - 1);
+              }}
+              disabled={!last}
+              aria-label="Open your shots"
+              className="relative size-14 overflow-hidden rounded-xl border-2 border-white/40 bg-white/10"
+            >
               {last ? <img key={flyKey} src={last} alt="Last shot" className="size-full object-cover [animation:pc-fly_0.5s_ease]" /> : null}
-            </div>
+              {roll.length > 1 ? <span className="absolute right-0.5 top-0.5 rounded-full bg-black/60 px-1.5 text-[10px] font-bold">{roll.length}</span> : null}
+            </button>
             <button
               type="button"
               onClick={snap}
@@ -417,6 +445,50 @@ export function DisposableCamera({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Shots shared from this camera session, like tapping the thumbnail on a phone camera. */
+function RollViewer({ urls, index, onIndex, onClose }: { urls: string[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
+  const touch = useRef<number | null>(null);
+  const go = (i: number) => i >= 0 && i < urls.length && onIndex(i);
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col bg-[#0b0b0d]" role="dialog" aria-label="Your shots">
+      <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" onClick={onClose} className="inline-flex h-10 items-center gap-1 rounded-full bg-white/12 pl-2 pr-4 text-sm font-semibold" aria-label="Back to camera">
+          <ChevronLeft className="size-5" aria-hidden /> Camera
+        </button>
+        <span className="text-sm font-semibold tabular-nums text-white/80">
+          {index + 1} of {urls.length}
+        </span>
+        <span className="w-24" />
+      </div>
+      <div
+        className="relative grid min-h-0 flex-1 place-items-center px-3"
+        onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
+        onTouchEnd={(e) => {
+          const s = touch.current;
+          touch.current = null;
+          if (s === null) return;
+          const dx = e.changedTouches[0].clientX - s;
+          if (dx > 50) go(index - 1);
+          if (dx < -50) go(index + 1);
+        }}
+      >
+        <img key={urls[index]} src={urls[index]} alt="Your shot" className="max-h-full max-w-full rounded-xl object-contain [animation:pc-develop_0.4s_ease]" />
+        {index > 0 ? (
+          <button type="button" onClick={() => go(index - 1)} className="absolute left-2 grid size-10 place-items-center rounded-full bg-black/40" aria-label="Previous shot">
+            <ChevronLeft className="size-6" aria-hidden />
+          </button>
+        ) : null}
+        {index < urls.length - 1 ? (
+          <button type="button" onClick={() => go(index + 1)} className="absolute right-2 grid size-10 place-items-center rounded-full bg-black/40" aria-label="Next shot">
+            <ChevronRight className="size-6" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      <p className="px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 text-center text-sm text-white/70">✓ Shared — it shows up in the album in a few seconds.</p>
     </div>
   );
 }

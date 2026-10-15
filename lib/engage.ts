@@ -162,7 +162,7 @@ export async function eventStats(eventId: string): Promise<Stats> {
     ),
     q<{ id: string; name: string | null; count: number }>(
       `select g.id, g.name, count(*)::int as count from photos p join guests g on g.id = p.guest_id
-       where p.event_id = $1 and p.status = 'ready' group by g.id order by count(*) desc, min(p.ready_at) limit 5`,
+       where p.event_id = $1 and p.status = 'ready' group by g.id order by count(*) desc, min(p.ready_at) limit 10`,
       [eventId],
     ),
     q<{ id: string; vote_count: number; name: string | null }>(
@@ -182,4 +182,42 @@ export async function eventStats(eventId: string): Promise<Stats> {
       return { id: t.id, sm: publicUrl(k.sm), md: publicUrl(k.md), votes: t.vote_count, by: t.name };
     }),
   };
+}
+
+// ------------------------------------------------------------------ mission board
+
+export type Finisher = { id: string; name: string | null; at: string };
+export type MissionBoard = { missions: { id: string; people: Finisher[]; total: number }[]; finishers: Finisher[] };
+
+/**
+ * Who completed each mission, fastest first (time of their first photo for it),
+ * and who completed every mission, ordered by when they finished the last one.
+ */
+export async function missionBoard(eventId: string): Promise<MissionBoard> {
+  const rows = await q<{ mission_id: string; guest_id: string; name: string | null; at: Date }>(
+    `select p.mission_id, g.id as guest_id, g.name, min(p.created_at) as at
+     from photos p join event_missions m on m.id = p.mission_id join guests g on g.id = p.guest_id
+     where p.event_id = $1 and p.status = 'ready'
+     group by p.mission_id, g.id order by min(p.created_at)`,
+    [eventId],
+  );
+  const total = (await one<{ n: number }>("select count(*)::int as n from event_missions where event_id = $1", [eventId]))?.n ?? 0;
+  const per = new Map<string, Finisher[]>();
+  const byGuest = new Map<string, { name: string | null; done: number; last: number }>();
+  for (const r of rows) {
+    const f = { id: r.guest_id, name: r.name, at: new Date(r.at).toISOString() };
+    per.set(r.mission_id, [...(per.get(r.mission_id) ?? []), f]);
+    const g = byGuest.get(r.guest_id) ?? { name: r.name, done: 0, last: 0 };
+    g.done++;
+    g.last = Math.max(g.last, new Date(r.at).getTime());
+    byGuest.set(r.guest_id, g);
+  }
+  const finishers = total
+    ? [...byGuest.entries()]
+        .filter(([, g]) => g.done >= total)
+        .sort((a, b) => a[1].last - b[1].last)
+        .slice(0, 20)
+        .map(([id, g]) => ({ id, name: g.name, at: new Date(g.last).toISOString() }))
+    : [];
+  return { missions: [...per.entries()].map(([id, people]) => ({ id, people: people.slice(0, 10), total: people.length })), finishers };
 }

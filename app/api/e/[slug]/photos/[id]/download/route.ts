@@ -11,7 +11,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!/^[0-9a-f-]{36}$/.test(id)) return new Response("Not found", { status: 404 });
   const e = await getEventBySlug(slug);
   if (!e || !e.paid_at || e.purged_at) return new Response("Not found", { status: 404 });
-  if (!(await rateLimit("photo-dl", 300, 10 * 60_000))) return new Response("Please slow down.", { status: 429 });
+  if (!(await rateLimit("photo-dl", 1000, 10 * 60_000))) return new Response("Please slow down.", { status: 429 });
   const p = await one("select id from photos where id = $1 and event_id = $2 and status = 'ready'", [id, e.id]);
   if (!p) return new Response("Not found", { status: 404 });
   const stream = await getObjectStream(photoKeys(e.id, id).full);

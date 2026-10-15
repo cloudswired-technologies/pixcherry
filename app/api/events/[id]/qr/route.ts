@@ -1,6 +1,5 @@
 import QRCode from "qrcode";
 import { currentUser } from "@/lib/auth";
-import { APP_URL } from "@/lib/env";
 import { getManagedEvent, guestUrl } from "@/lib/events";
 
 // QR code PNG (or SVG with ?format=svg) for printing at the venue.
@@ -10,7 +9,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!user) return new Response("Unauthorised", { status: 401 });
   const e = await getManagedEvent((await params).id, user);
   if (!e) return new Response("Not found", { status: 404 });
-  const url = guestUrl(APP_URL, e.slug);
+  const url = guestUrl(e.slug);
   const fmt = new URL(req.url).searchParams.get("format");
   const name = e.name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "event";
   if (fmt === "svg") {

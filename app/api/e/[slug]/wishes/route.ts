@@ -15,7 +15,7 @@ async function load(slug: string) {
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const e = await load((await params).slug);
   if (!e) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if (!(await rateLimit("wishes-read", 240, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
+  if (!(await rateLimit("wishes-read", 600, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
   const since = new URL(req.url).searchParams.get("since");
   return NextResponse.json({ wishes: await listWishes(e.id, { since }) }, { headers: { "cache-control": "no-store" } });
 }

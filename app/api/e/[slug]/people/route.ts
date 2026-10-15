@@ -8,6 +8,6 @@ import { rateLimit } from "@/lib/rate-limit";
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const e = await getEventBySlug((await params).slug);
   if (!e || !e.paid_at || e.purged_at) return NextResponse.json({ error: "Event not found." }, { status: 404 });
-  if (!(await rateLimit("people", 120, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
+  if (!(await rateLimit("people", 600, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
   return NextResponse.json({ people: await listPeople(e.id) }, { headers: { "cache-control": "no-store" } });
 }

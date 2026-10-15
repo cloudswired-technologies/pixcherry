@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import sharp from "sharp";
 import { requireUser } from "@/lib/auth";
 import { one, q, tx } from "@/lib/db";
-import { getManagedEvent, refreshDeletion, uniqueSlug } from "@/lib/events";
+import { getManagedEvent, refreshDeletion, slugFromName, slugTaken, uniqueSlug } from "@/lib/events";
+import { slugProblem } from "@/lib/slug";
 import { parseLocalDateTime } from "@/lib/format";
 import { MISSION_PRESETS, setWishHidden } from "@/lib/engage";
 import { cleanTags } from "@/lib/tags";
@@ -15,6 +16,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { audit } from "@/lib/settings";
 import { deleteObject, deletePrefix, putObject } from "@/lib/storage";
 import { purgeEvent } from "@/lib/jobs";
+import { deleteComment } from "@/lib/comments";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -25,6 +27,16 @@ async function managed(id: string) {
   const e = await getManagedEvent(id, user);
   if (!e) redirect("/dashboard");
   return { user, e };
+}
+
+/** The link the organiser typed (empty = make one from the name). */
+async function readSlug(fd: FormData, exceptEventId?: string) {
+  const s = String(fd.get("slug") ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+  if (!s) return { slug: null } as const;
+  const problem = slugProblem(s);
+  if (problem) return { error: `Event link: ${problem}` } as const;
+  if (await slugTaken(s, exceptEventId)) return { error: `The link “${s}” is already taken. Try adding the date or a word.` } as const;
+  return { slug: s } as const;
 }
 
 function readDetails(fd: FormData) {
@@ -48,7 +60,11 @@ export async function createEvent(_: FormState, fd: FormData): Promise<FormState
   const d = readDetails(fd);
   if ("error" in d) return { error: d.error };
   if (d.ends.getTime() < Date.now() - 86400_000) return { error: "That date has already passed." };
-  const slug = await uniqueSlug();
+  // A link filled in from the name gets -2, -3… when taken; one the organiser typed must be free.
+  const auto = fd.get("slug_auto") === "1";
+  const picked = auto ? { slug: null } : await readSlug(fd);
+  if ("error" in picked) return { error: picked.error };
+  const slug = picked.slug ?? (await slugFromName(auto ? String(fd.get("slug") ?? "") || d.name : d.name));
   const row = await one<{ id: string }>(
     "insert into events (owner_id, slug, name, description, venue, starts_at, ends_at) values ($1,$2,$3,$4,$5,$6,$7) returning id",
     [user.id, slug, d.name, d.description, d.venue, d.starts, d.ends],
@@ -64,7 +80,18 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
   if ("error" in d) return { error: d.error };
   const branding = e.cfg.features.custom_branding;
   const accent = String(fd.get("accent_color") ?? "");
+  const picked = fd.has("slug") ? await readSlug(fd, e.id) : { slug: null };
+  if ("error" in picked) return { error: picked.error };
   await tx(async (c) => {
+    if (picked.slug && picked.slug !== e.slug) {
+      // The old link (and printed QR codes) keep working: they redirect to the new one.
+      await q(
+        "update events set old_slugs = array_append(array_remove(old_slugs, $2), $3), slug = $2 where id = $1",
+        [e.id, picked.slug, e.slug],
+        c,
+      );
+      await audit(user.id, "event.link", e.id, { from: e.slug, to: picked.slug }, c);
+    }
     await q(
       `update events set name = $2, description = $3, starts_at = $4, ends_at = $5, ask_guest_name = $6, uploads_enabled = $7,
          require_approval = $8, accent_color = $9, camera_only = $10, venue = $11, thank_you = $12, suggested_tags = $13, updated_at = now() where id = $1`,
@@ -146,7 +173,8 @@ export async function uploadLogo(id: string, _: FormState, fd: FormData): Promis
 export async function regenerateLink(id: string) {
   const { user, e } = await managed(id);
   const slug = await uniqueSlug();
-  await q("update events set slug = $2, updated_at = now() where id = $1", [e.id, slug]);
+  // A fresh private link: old links (and their redirects) stop working.
+  await q("update events set slug = $2, old_slugs = '{}', updated_at = now() where id = $1", [e.id, slug]);
   await audit(user.id, "event.new_link", e.id);
   revalidatePath(`/dashboard/events/${e.id}`);
 }
@@ -261,6 +289,12 @@ export async function toggleWish(id: string, wishId: string, hidden: boolean) {
   const { user, e } = await managed(id);
   await setWishHidden(e.id, wishId, hidden);
   await audit(user.id, hidden ? "wish.hide" : "wish.show", e.id, { wish: wishId });
+  revalidatePath(`/dashboard/events/${e.id}/engage`);
+}
+
+export async function removeComment(id: string, commentId: string) {
+  const { user, e } = await managed(id);
+  if (await deleteComment(e.id, commentId, null)) await audit(user.id, "comment.delete", e.id, { comment: commentId });
   revalidatePath(`/dashboard/events/${e.id}/engage`);
 }
 

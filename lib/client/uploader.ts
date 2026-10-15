@@ -7,7 +7,7 @@ import { looksLikeImage, prepare, type Quality } from "@/lib/client/compress";
 // storage (with progress and retries) → confirm. Three files at a time.
 
 export type ItemStatus = "queued" | "preparing" | "uploading" | "done" | "error";
-export type Item = { key: string; name: string; preview: string; status: ItemStatus; progress: number; error?: string };
+export type Item = { key: string; name: string; preview: string; status: ItemStatus; progress: number; error?: string; photoId?: string; doneAt?: number };
 
 const PARALLEL = 3;
 const PUT_RETRIES = 3;
@@ -85,7 +85,7 @@ export function useUploader(opts: {
       const u = body.uploads[0];
       if (typeof body.remaining === "number") setRemaining(body.remaining);
 
-      patch(key, { status: "uploading", progress: 0 });
+      patch(key, { status: "uploading", progress: 0, photoId: u.id });
       let lastErr: unknown;
       for (let attempt = 0; attempt < PUT_RETRIES; attempt++) {
         try {
@@ -107,7 +107,7 @@ export function useUploader(opts: {
         if (done?.ok) break;
         await sleep(1500);
       }
-      patch(key, { status: "done", progress: 1 });
+      patch(key, { status: "done", progress: 1, doneAt: Date.now() });
       batchDone.current++;
       o.onUploaded();
     },

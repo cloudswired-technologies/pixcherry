@@ -113,16 +113,16 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   expect((await sql("select vote_count from photos where id = $1", [shot.id]))[0].vote_count).toBe(1);
 
   // People folders.
-  await g2.getByRole("button", { name: "By People" }).click();
+  await g2.getByRole("button", { name: "People", exact: true }).click();
   await g2.getByRole("button", { name: /Amir/ }).first().click();
   await expect(g2.getByRole("heading", { name: "Photos by Amir" })).toBeVisible();
   await expect(g2.getByAltText("Photo by Amir")).toHaveCount(1);
   await expect(g2.getByAltText("Photo by Nora")).toHaveCount(0);
 
-  // Highlights: top snappers + most loved.
-  await g2.getByRole("button", { name: "Highlights" }).click();
-  await expect(g2.getByRole("heading", { name: "🏆 Top snappers" })).toBeVisible({ timeout: 25_000 });
-  await expect(g2.locator("li", { hasText: "Amir" })).toBeVisible({ timeout: 25_000 });
+  // Top Snappers tab: podium.
+  await g2.getByRole("button", { name: "Top Snappers" }).click();
+  await expect(g2.getByRole("heading", { name: "🏆 Top Snappers" })).toBeVisible({ timeout: 25_000 });
+  await expect(g2.getByRole("main").getByText("Amir", { exact: true }).first()).toBeVisible({ timeout: 25_000 });
 
   // Wishes.
   await g2.getByRole("navigation", { name: "Actions" }).getByRole("button", { name: "Wishes" }).click();

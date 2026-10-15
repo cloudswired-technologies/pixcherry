@@ -1,6 +1,8 @@
 import "server-only";
 import { one, q, type Queryable } from "@/lib/db";
 import { randomSlug } from "@/lib/crypto";
+import { GUEST_HOST, GUEST_URL } from "@/lib/env";
+import { SLUG_RE, slugProblem, slugify } from "@/lib/slug";
 import { type EventConfig, type Overrides, type PlanSnapshot, deletionDate, eventConfig } from "@/lib/limits";
 import type { AddonKind } from "@/lib/plan-schema";
 import { publicUrl } from "@/lib/storage";
@@ -9,6 +11,7 @@ export type EventRow = {
   id: string;
   owner_id: string;
   slug: string;
+  old_slugs: string[];
   name: string;
   description: string;
   venue: string;
@@ -45,9 +48,24 @@ function withCfg(e: EventRow): EventWithConfig {
 }
 
 export async function getEventBySlug(slug: string) {
-  if (!/^[a-z0-9]{8,32}$/.test(slug)) return null;
+  if (!SLUG_RE.test(slug)) return null;
   const e = await one<EventRow>("select * from events where slug = $1", [slug]);
   return e ? withCfg(e) : null;
+}
+
+/** Current slug of an event that used to live at `slug` (renamed link), if any. */
+export async function renamedSlug(slug: string) {
+  if (!SLUG_RE.test(slug)) return null;
+  return (await one<{ slug: string }>("select slug from events where $1 = any(old_slugs) order by updated_at desc limit 1", [slug]))?.slug ?? null;
+}
+
+/** A link nobody else uses now or used before (old links still redirect). */
+export async function slugTaken(slug: string, exceptEventId?: string, db?: Queryable) {
+  return !!(await one(
+    "select 1 from events where (slug = $1 or $1 = any(old_slugs)) and id <> coalesce($2::uuid, '00000000-0000-0000-0000-000000000000')",
+    [slug, exceptEventId ?? null],
+    db,
+  ));
 }
 
 export async function getEventById(id: string, db?: Queryable) {
@@ -65,6 +83,18 @@ export async function getManagedEvent(id: string, user: { id: string; is_admin: 
 
 export async function listOwnerEvents(ownerId: string) {
   return (await q<EventRow>("select * from events where owner_id = $1 order by starts_at desc", [ownerId])).map(withCfg);
+}
+
+/** Free slug from the event name ("aina-hakim", "aina-hakim-2", …), else a random one. */
+export async function slugFromName(name: string, db?: Queryable) {
+  const base = slugify(name).slice(0, 34).replace(/-+$/g, "");
+  if (base && !slugProblem(base)) {
+    for (let i = 1; i <= 20; i++) {
+      const s = i === 1 ? base : `${base}-${i}`;
+      if (!(await slugTaken(s, undefined, db))) return s;
+    }
+  }
+  return uniqueSlug(db);
 }
 
 export async function uniqueSlug(db?: Queryable) {
@@ -88,8 +118,14 @@ export async function refreshDeletion(eventId: string, db: Queryable) {
   );
 }
 
-export function guestUrl(appUrl: string, slug: string) {
-  return `${appUrl}/e/${slug}`;
+/** The link guests open (QR code): app.pixcherry.com/<slug> in production. */
+export function guestUrl(slug: string) {
+  return `${GUEST_URL}/${slug}`;
+}
+
+/** Same page as a path on the guest host (links inside the guest app). */
+export function guestPath(slug: string) {
+  return GUEST_HOST ? `/${slug}` : `/e/${slug}`;
 }
 
 export function coverUrl(e: Pick<EventRow, "cover_key" | "updated_at">) {

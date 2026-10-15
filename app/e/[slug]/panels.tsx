@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, CloudUpload, Heart, Loader2, Send, X } from "lucide-react";
+import { ArrowRight, Check, CloudUpload, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
 import type { GalleryPhoto } from "@/lib/photos";
 import type { Gallery } from "./use-gallery";
 
@@ -15,7 +15,42 @@ export const initial = (name: string | null) => (name ?? "G").trim().charAt(0).t
 
 // ------------------------------------------------------------------ masonry grid
 
-export function Masonry({ gallery, onOpen, missions, empty }: { gallery: Gallery; onOpen: (i: number) => void; missions: Map<string, MissionInfo>; empty: string }) {
+/** A photo the guest just shared that isn't in the gallery yet. */
+export type PendingTile = { key: string; preview: string; status: string; progress: number };
+
+function Uploading({ t }: { t: PendingTile }) {
+  const label = t.status === "uploading" ? `Uploading ${Math.round(t.progress * 100)}%` : t.status === "done" ? "Almost there…" : "Getting ready…";
+  return (
+    <div className="relative mb-2 block aspect-[3/4] w-full break-inside-avoid overflow-hidden rounded-2xl bg-muted [animation:pc-rise_0.3s_ease_both]" aria-busy="true">
+      <img src={t.preview} alt="" className="size-full scale-105 object-cover opacity-70 blur-[2px]" />
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-transparent [animation:pc-shimmer_1.3s_ease-in-out_infinite]" />
+      </div>
+      <div className="absolute inset-x-2 bottom-2 rounded-xl bg-black/55 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur">
+        <div className="flex items-center gap-1.5">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden /> {label}
+        </div>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/25">
+          <div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${t.status === "done" ? 100 : Math.max(6, t.progress * 100)}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Masonry({
+  gallery,
+  onOpen,
+  missions,
+  empty,
+  pending,
+}: {
+  gallery: Gallery;
+  onOpen: (i: number) => void;
+  missions: Map<string, MissionInfo>;
+  empty: string;
+  pending?: PendingTile[];
+}) {
   const sentinel = useRef<HTMLDivElement>(null);
   const { next, loading, more, photos } = gallery;
   useEffect(() => {
@@ -26,10 +61,11 @@ export function Masonry({ gallery, onOpen, missions, empty }: { gallery: Gallery
     return () => io.disconnect();
   }, [next, more]);
 
-  if (!photos.length && !loading) return <p className="mx-2 rounded-3xl bg-white px-4 py-14 text-center text-sm text-muted-foreground shadow-soft">{empty}</p>;
+  if (!photos.length && !pending?.length && !loading) return <p className="mx-2 rounded-3xl bg-white px-4 py-14 text-center text-sm text-muted-foreground shadow-soft">{empty}</p>;
   return (
     <>
       <div className="columns-2 gap-2 px-2 sm:columns-3 lg:columns-4">
+        {pending?.map((t) => <Uploading key={t.key} t={t} />)}
         {photos.map((ph, i) => {
           const m = ph.mission ? missions.get(ph.mission) : null;
           return (
@@ -43,9 +79,18 @@ export function Masonry({ gallery, onOpen, missions, empty }: { gallery: Gallery
               <img src={ph.sm} alt={ph.by ? `Photo by ${ph.by}` : "Event photo"} loading="lazy" decoding="async" className="size-full object-cover" />
               {ph.status === "review" ? <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">Waiting approval</span> : null}
               {m ? <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs shadow-soft">{m.emoji ?? "🎯"}</span> : null}
-              {ph.votes > 0 ? (
-                <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
-                  <Heart className={`size-3 ${ph.voted ? "fill-brand text-brand" : ""}`} aria-hidden /> {ph.votes}
+              {ph.votes > 0 || ph.comments > 0 ? (
+                <span className="absolute bottom-2 right-2 inline-flex items-center gap-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+                  {ph.votes > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Heart className={`size-3 ${ph.voted ? "fill-brand text-brand" : ""}`} aria-hidden /> {ph.votes}
+                    </span>
+                  ) : null}
+                  {ph.comments > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <MessageCircle className="size-3" aria-hidden /> {ph.comments}
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </button>
@@ -69,17 +114,19 @@ export function AlbumCard({ title, subtitle, cover, emoji, onClick, tall }: { ti
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-brand to-[#ff7a93] text-5xl">{emoji ?? "🎯"}</div>
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4 text-white">
+      <div className={`absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 text-white ${tall ? "p-4" : "p-3"}`}>
         <div className="min-w-0">
-          <div className="truncate text-lg font-bold leading-tight">
+          <div className={`font-bold leading-tight ${tall ? "truncate text-lg" : "line-clamp-2 break-words text-base"}`}>
             {emoji ? `${emoji} ` : ""}
             {title}
           </div>
           <div className="text-sm text-white/80">{subtitle}</div>
         </div>
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-ink">
-          <ArrowRight className="size-4" aria-hidden />
-        </span>
+        {tall ? (
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-ink">
+            <ArrowRight className="size-4" aria-hidden />
+          </span>
+        ) : null}
       </div>
     </button>
   );
@@ -105,16 +152,35 @@ export function TopSnappers({ snappers }: { snappers: Snapper[] }) {
   );
 }
 
-export function MissionsProgress({ missions, done, onPick, canShoot }: { missions: MissionInfo[]; done: Set<string>; onPick: (id: string) => void; canShoot: boolean }) {
+export function MissionsProgress({
+  missions,
+  done,
+  onPick,
+  canShoot,
+  onAll,
+}: {
+  missions: MissionInfo[];
+  done: Set<string>;
+  onPick: (id: string) => void;
+  canShoot: boolean;
+  onAll?: () => void;
+}) {
   if (!missions.length) return null;
   const n = missions.filter((m) => done.has(m.id)).length;
   return (
     <section className="rounded-3xl bg-white p-4 shadow-soft">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-bold">🎯 Snap missions</h2>
-        <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-sm font-bold text-brand">
-          {n}/{missions.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-sm font-bold text-brand">
+            {n}/{missions.length}
+          </span>
+          {onAll ? (
+            <button type="button" onClick={onAll} className="text-sm font-semibold text-brand">
+              See all
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-brand transition-[width] duration-700" style={{ width: `${(n / missions.length) * 100}%` }} />
@@ -124,7 +190,7 @@ export function MissionsProgress({ missions, done, onPick, canShoot }: { mission
         {missions.map((m) => {
           const ok = done.has(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => onPick(m.id)} className={`flex w-32 shrink-0 flex-col items-start gap-1 rounded-2xl border p-3 text-left ${ok ? "border-transparent bg-ok-soft" : "border-border bg-background"}`}>
+            <button key={m.id} type="button" onClick={() => onPick(m.id)} className={`flex w-40 shrink-0 flex-col items-start gap-1.5 rounded-2xl border p-3 text-left ${ok ? "border-transparent bg-ok-soft" : "border-border bg-background"}`}>
               <span className="flex w-full items-center justify-between text-xl">
                 {m.emoji ?? "🎯"}
                 {ok ? (
@@ -133,7 +199,7 @@ export function MissionsProgress({ missions, done, onPick, canShoot }: { mission
                   </span>
                 ) : null}
               </span>
-              <span className="line-clamp-2 text-[13px] font-semibold leading-tight">{m.title}</span>
+              <span className="text-[13px] font-semibold leading-snug">{m.title}</span>
             </button>
           );
         })}
@@ -252,7 +318,7 @@ export function WishesPanel({ slug, onWrite, canWrite, refreshKey }: { slug: str
 
 // ------------------------------------------------------------------ sheets
 
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+export function Sheet({ open, onClose, title, children, top }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; top?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -261,7 +327,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center" onClick={onClose}>
+    <div className={`fixed inset-0 flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center ${top ? "z-[70]" : "z-50"}`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, Download, Heart, Share2 } from "lucide-react";
+import { ChevronLeft, Download, Heart, MessageCircle, Share2 } from "lucide-react";
 import type { GalleryPhoto } from "@/lib/photos";
+import { CommentPreview, CommentsSheet, useComments } from "./comments";
 import { initial } from "./panels";
 
 type MissionMap = Map<string, { title: string; emoji: string | null }>;
@@ -20,8 +21,11 @@ export function Viewer({
   onFolder,
   total,
   onTag,
+  comments,
 }: {
   onTag?: (tag: string) => void;
+  /** Comments on: who's commenting, and how to report a new count back to the gallery. */
+  comments?: { joined: boolean; canWrite: boolean; myName: string | null; onNeedJoin: () => void; onCount: (photoId: string, n: number) => void } | null;
   slug: string;
   photos: GalleryPhoto[];
   index: number;
@@ -39,6 +43,12 @@ export function Viewer({
   const strip = useRef<HTMLDivElement>(null);
   const [burst, setBurst] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
+  const [talk, setTalk] = useState(false);
+  const talkRef = useRef(false);
+  useEffect(() => {
+    talkRef.current = talk;
+  }, [talk]);
+  const thread = useComments(slug, photos[index]?.id ?? "", !!comments && (talk || (photos[index]?.comments ?? 0) > 0));
   const go = (i: number) => {
     if (i < 0 || i >= photos.length) return;
     setDir(i > index ? 1 : -1);
@@ -65,7 +75,8 @@ export function Viewer({
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") history.back();
+      if (e.key === "Escape") return talkRef.current ? setTalk(false) : history.back();
+      if (talkRef.current) return;
       if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
       if (e.key === "ArrowRight" && index < photos.length - 1) onIndex(index + 1);
     };
@@ -171,6 +182,7 @@ export function Viewer({
             ))}
           </div>
         ) : null}
+        {comments ? <CommentPreview items={thread.items} count={ph.comments} onOpen={() => setTalk(true)} /> : null}
         <div ref={strip} className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {photos.map((p, i) => (
             <button key={p.id} type="button" data-i={i} onClick={() => go(i)} className={`size-12 shrink-0 overflow-hidden rounded-lg border-2 ${i === index ? "border-white" : "border-transparent opacity-60"}`}>
@@ -190,11 +202,31 @@ export function Viewer({
               <Download className="size-6" aria-hidden />
             </a>
           ) : null}
+          {comments && ph.status === "ready" ? (
+            <button type="button" onClick={() => setTalk(true)} aria-label="Comments" className="inline-flex h-11 items-center gap-2 rounded-full px-4 font-semibold">
+              <MessageCircle className="size-6" aria-hidden />
+              {ph.comments}
+            </button>
+          ) : null}
           <button type="button" onClick={share} className="grid size-11 place-items-center rounded-full" aria-label="Share photo">
             <Share2 className="size-6" aria-hidden />
           </button>
         </div>
       </div>
+      {talk && comments ? (
+        <CommentsSheet
+          slug={slug}
+          photoId={ph.id}
+          items={thread.items}
+          set={thread.set}
+          onClose={() => setTalk(false)}
+          canWrite={comments.canWrite}
+          joined={comments.joined}
+          myName={comments.myName}
+          onNeedJoin={comments.onNeedJoin}
+          onCount={(n) => comments.onCount(ph.id, n)}
+        />
+      ) : null}
     </div>
   );
 }

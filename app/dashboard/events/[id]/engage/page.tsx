@@ -4,12 +4,14 @@ import { ArrowDown, ArrowUp, Eye, EyeOff, Sparkles, Trash2 } from "lucide-react"
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { recentComments } from "@/lib/comments";
 import { listMissions, listWishes } from "@/lib/engage";
+import { photoKeys, publicUrl } from "@/lib/storage";
 import { getManagedEvent } from "@/lib/events";
 import { formatDateTime } from "@/lib/format";
-import { addMission, addPresetMissions, deleteMission, moveMission, toggleWish } from "../../actions";
+import { addMission, addPresetMissions, deleteMission, moveMission, removeComment, toggleWish } from "../../actions";
 
-export const metadata = { title: "Missions & wishes" };
+export const metadata = { title: "Missions, wishes & comments" };
 
 export default async function Engage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +19,11 @@ export default async function Engage({ params }: { params: Promise<{ id: string 
   const e = await getManagedEvent(id, user);
   if (!e || !e.paid_at) notFound();
   const f = e.cfg.features;
-  const [missions, wishes] = await Promise.all([f.missions ? listMissions(e.id) : [], f.wishes ? listWishes(e.id, { includeHidden: true, limit: 500 }) : []]);
+  const [missions, wishes, comments] = await Promise.all([
+    f.missions ? listMissions(e.id) : [],
+    f.wishes ? listWishes(e.id, { includeHidden: true, limit: 500 }) : [],
+    f.comments ? recentComments(e.id, 200) : [],
+  ]);
 
   return (
     <div className="grid gap-6">
@@ -118,6 +124,37 @@ export default async function Engage({ params }: { params: Promise<{ id: string 
           <p className="text-sm text-muted-foreground">No wishes yet. They appear here as guests write them.</p>
         )}
       </Card>
+
+      {f.comments ? (
+        <Card className="grid gap-4">
+          <div>
+            <h2 className="text-lg font-bold">💬 Photo comments</h2>
+            <p className="text-sm text-muted-foreground">Newest first. Delete anything that shouldn&apos;t be there.</p>
+          </div>
+          {comments.length ? (
+            <ul className="grid gap-2">
+              {comments.map((c) => (
+                <li key={c.id} className="flex items-start gap-3 rounded-xl border border-border bg-background p-3">
+                  <img src={publicUrl(photoKeys(e.id, c.photo).sm)} alt="" className="size-14 shrink-0 rounded-lg object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-line break-words text-sm">{c.body}</p>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {c.name ?? "A guest"} · {formatDateTime(c.at)}
+                    </div>
+                  </div>
+                  <form action={removeComment.bind(null, e.id, c.id)}>
+                    <button className="inline-flex h-8 items-center gap-1 rounded-full bg-muted px-3 text-xs font-semibold text-danger" title="Delete comment">
+                      <Trash2 className="size-3.5" aria-hidden /> Delete
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No comments yet.</p>
+          )}
+        </Card>
+      ) : null}
     </div>
   );
 }

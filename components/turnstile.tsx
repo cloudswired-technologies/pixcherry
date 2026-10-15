@@ -1,13 +1,68 @@
 "use client";
 
-import Script from "next/script";
+import { useEffect, useRef } from "react";
 
-/** Cloudflare Turnstile widget; adds `cf-turnstile-response` to the surrounding form. */
-export function Turnstile({ siteKey }: { siteKey: string }) {
-  return (
-    <>
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-      <div className="cf-turnstile" data-sitekey={siteKey} data-size="flexible" data-appearance="interaction-only" />
-    </>
-  );
+// Cloudflare Turnstile, rendered explicitly so the form knows when the token is
+// ready (`onToken`) and gets a fresh one after expiry. The widget adds a hidden
+// `cf-turnstile-response` input to the surrounding form.
+
+type Api = {
+  render(el: HTMLElement, opts: Record<string, unknown>): string;
+  reset(id: string): void;
+  remove(id: string): void;
+};
+declare global {
+  interface Window {
+    turnstile?: Api;
+  }
+}
+
+let loading: Promise<Api> | null = null;
+function loadApi() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  loading ??= new Promise<Api>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    s.async = true;
+    s.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error("turnstile")));
+    s.onerror = () => {
+      loading = null;
+      reject(new Error("turnstile"));
+    };
+    document.head.appendChild(s);
+  });
+  return loading;
+}
+
+export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken?: (token: string | null) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const cb = useRef(onToken);
+  useEffect(() => {
+    cb.current = onToken;
+  });
+  useEffect(() => {
+    let id: string | null = null;
+    let gone = false;
+    loadApi()
+      .then((api) => {
+        if (gone || !box.current) return;
+        id = api.render(box.current, {
+          sitekey: siteKey,
+          size: "flexible",
+          appearance: "interaction-only",
+          callback: (t: string) => cb.current?.(t),
+          "expired-callback": () => {
+            cb.current?.(null);
+            if (id) api.reset(id);
+          },
+          "error-callback": () => cb.current?.(null),
+        });
+      })
+      .catch(() => cb.current?.(null));
+    return () => {
+      gone = true;
+      if (id) window.turnstile?.remove(id);
+    };
+  }, [siteKey]);
+  return <div ref={box} />;
 }
