@@ -5,8 +5,8 @@ import pg from "pg";
 import sharp from "sharp";
 
 // Round 4: memorable event links (+ rename redirect, find page), uploading
-// tiles, comments (guest + organiser), Missions tab with Mission Master badge,
-// Top Snappers tab, camera roll, QR / slideshow / install in More, "You" chip,
+// tiles, captions (own photos, written on downloads), Missions tab with Mission Master badge,
+// Top Snappers tab, Snap (phone camera + develop), QR / slideshow / install in More, "You" chip,
 // and the home-screen app's signed start link.
 
 const ENV = readFileSync(".env.local", "utf8");
@@ -42,7 +42,7 @@ async function login(page: Page, email: string) {
 
 const jpeg = (color: string) => sharp({ create: { width: 900, height: 1200, channels: 3, background: color } }).jpeg().toBuffer();
 
-test("links, comments, missions, top snappers, camera roll, install", async ({ browser, page }) => {
+test("links, captions, missions, top snappers, snap, install", async ({ browser, page }) => {
   distinctPhones(browser);
   test.setTimeout(300_000);
   const tag = Date.now().toString(36);
@@ -65,7 +65,7 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await sql(
     `update events e set paid_at = now(), deletion_at = now() + interval '9 days', plan_id = p.id,
        plan_snapshot = jsonb_build_object('code', p.code, 'name', p.name, 'price_cents', p.price_cents, 'limits', p.limits,
-         'features', p.features || '{"missions":true,"slideshow":true,"voting":true,"comments":true,"camera":true}'::jsonb,
+         'features', p.features || '{"missions":true,"slideshow":true,"voting":true,"camera":true}'::jsonb,
          'quality', json_build_object('name', q.name, 'max_px', q.max_px, 'jpeg_quality', q.jpeg_quality))
      from plans p join quality_presets q on q.id = p.quality_preset_id where p.code = 'basic' and e.id = $1`,
     [ev.id],
@@ -126,69 +126,52 @@ test("links, comments, missions, top snappers, camera roll, install", async ({ b
   await expect(g1.getByAltText("Photo by Siti Aminah")).toHaveCount(2, { timeout: 60_000 });
   await expect(g1.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
 
-  // ---------------------------------------------------------------- camera: mission shot, then the camera roll
+  // ---------------------------------------------------------------- Snap: phone camera -> develop -> share (mission)
   await g1.getByRole("button", { name: "Missions", exact: true }).click();
   await g1.getByRole("button", { name: "Snap it" }).click();
-  const cam = g1.getByRole("dialog", { name: "Camera" });
-  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
-  await cam.getByRole("button", { name: "Take photo" }).click();
-  await cam.getByRole("button", { name: "Share" }).click();
-  await cam.getByRole("button", { name: "Open your shots" }).click();
-  const roll = cam.getByRole("dialog", { name: "Your shots" });
-  await expect(roll.getByAltText("Your shot")).toBeVisible();
-  await expect(roll.getByText("1 of 1")).toBeVisible();
-  await roll.getByRole("button", { name: "Back to camera" }).click();
-  await expect(roll).toHaveCount(0);
-  await expect(cam).toBeVisible(); // back from the roll stays in the camera
-  await cam.getByRole("button", { name: "Back to album" }).click();
+  await g1.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: await jpeg("#f2b134") });
+  const dev = g1.getByRole("dialog", { name: "Your photo" });
+  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
+  await dev.getByRole("button", { name: "Share" }).click();
+  await expect(dev).toHaveCount(0);
   // Only mission done -> Mission Master.
+  await g1.getByRole("button", { name: "Missions", exact: true }).click();
   await expect(g1.getByRole("heading", { name: "Mission Master!" })).toBeVisible({ timeout: 60_000 });
   await expect(g1.getByRole("button", { name: "You: Siti Aminah" })).toContainText("🏆");
   await expect(g1.getByText("⚡ Fastest")).toBeVisible({ timeout: 35_000 });
 
-  // ---------------------------------------------------------------- comments
+  // ---------------------------------------------------------------- captions (own photo), zoom
   await g1.getByRole("button", { name: "All Photos", exact: true }).click();
+  await expect(g1.getByAltText("Photo by Siti Aminah")).toHaveCount(3, { timeout: 60_000 });
   await g1.getByAltText("Photo by Siti Aminah").first().click();
-  // Zoom loads the full-size file.
   await g1.getByRole("button", { name: "Zoom in" }).click();
   await expect(g1.getByAltText("Full size photo")).toHaveAttribute("src", /full.jpg/);
   await g1.getByRole("button", { name: "Close zoom" }).click();
-  await g1.getByRole("button", { name: "Comments" }).click();
-  await expect(g1.getByText("No comments yet")).toBeVisible();
-  await g1.getByLabel("Add a comment").fill("So pretty! 😍");
-  await g1.getByRole("button", { name: "Post" }).click();
-  await expect(g1.getByRole("dialog", { name: "Comments" }).getByText("So pretty! 😍")).toBeVisible();
-  await g1.getByRole("button", { name: "Close comments" }).click();
-  await expect(g1.getByRole("button", { name: "Comments" })).toContainText("1");
+  await g1.getByRole("button", { name: "Add a caption" }).click();
+  await g1.getByRole("textbox", { name: "Caption" }).fill("So pretty! 😍");
+  await g1.getByRole("button", { name: "Save caption" }).click();
+  await expect(g1.getByRole("dialog", { name: "Photo" }).getByText("So pretty! 😍")).toBeVisible();
   await g1.getByRole("button", { name: "Close" }).click();
+  const [cap] = await sql("select id, height from photos where event_id = $1 and caption = 'So pretty! 😍'", [ev.id]);
+  expect(cap).toBeTruthy();
+  const dl = await g1.request.get(`/api/e/${slug}/photos/${cap.id}/download`);
+  expect((await sharp(await dl.body()).metadata()).height!).toBeGreaterThan(cap.height);
 
-  // Guest 2 reads it, has to join to reply, then comments.
+  // Guest 2 sees the caption but can't edit someone else's photo; then joins as Nora.
   const c2 = await browser.newContext(PHONE);
   const g2 = await c2.newPage();
   await seenInstall(g2, slug);
   await g2.goto(`/e/${slug}`);
   await g2.getByRole("button", { name: "All Photos", exact: true }).click();
-  const commented = g2.locator("button", { has: g2.getByAltText("Photo by Siti Aminah") }).filter({ hasText: "1" });
-  await commented.first().click();
-  await expect(g2.getByText("So pretty! 😍")).toBeVisible();
-  await g2.getByRole("button", { name: "Comments" }).click();
-  await g2.getByLabel("Add a comment").fill("Cantiknya!");
-  await g2.getByRole("button", { name: "Post" }).click();
+  await g2.getByAltText("Photo by Siti Aminah").first().click();
+  await expect(g2.getByRole("dialog", { name: "Photo" }).getByText("So pretty! 😍")).toBeVisible();
+  await expect(g2.getByRole("button", { name: "Add a caption" })).toHaveCount(0);
+  await expect(g2.getByRole("button", { name: "Edit caption" })).toHaveCount(0);
+  await g2.getByRole("button", { name: "Close" }).click();
+  await g2.getByRole("button", { name: "Join", exact: true }).click();
   await g2.getByLabel("Your name").fill("Nora");
   await g2.getByRole("button", { name: /Let's go/ }).click();
-  await g2.getByRole("button", { name: "Post" }).click();
-  await expect(g2.getByRole("dialog", { name: "Comments" }).getByText("Cantiknya!")).toBeVisible();
-  const [cm] = await sql("select count(*)::int n from photo_comments where event_id = $1", [ev.id]);
-  expect(cm.n).toBe(2);
-
-  // Organiser removes one from the dashboard.
-  await page.goto(`/dashboard/events/${ev.id}/comments`);
-  await expect(page.getByText("Cantiknya!")).toBeVisible();
-  await page.locator("li", { hasText: "Cantiknya!" }).getByRole("button", { name: "Delete comment" }).click();
-  await page.getByRole("alertdialog", { name: "Delete this comment?" }).getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("Cantiknya!")).toHaveCount(0);
-  const [cnt] = await sql("select sum(comment_count)::int n from photos where event_id = $1", [ev.id]);
-  expect(cnt.n).toBe(1);
+  await expect(g2.getByRole("button", { name: "You: Nora" })).toBeVisible();
 
   // ---------------------------------------------------------------- Top Snappers + More menu
   await g2.goto(`/e/${slug}`);

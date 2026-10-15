@@ -16,7 +16,7 @@ const UUID = /^[0-9a-f-]{36}$/;
  * many files as the guest and event quotas allow (possibly fewer than asked).
  * A file may name a snap mission; unknown missions are dropped silently.
  */
-export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number; mission?: string | null; tags?: unknown }[]) {
+export async function reserveUploads(e: EventWithConfig, guestId: string, files: { type: string; size: number; mission?: string | null; tags?: unknown; caption?: unknown }[]) {
   const maxBytes = e.cfg.limits.max_file_mb * 1024 * 1024;
   for (const f of files) {
     if (!(ACCEPTED_TYPES as readonly string[]).includes(f.type)) return { error: "Only JPEG, PNG or WebP photos can be uploaded." } as const;
@@ -45,8 +45,8 @@ export async function reserveUploads(e: EventWithConfig, guestId: string, files:
     const rows: { id: string; type: string; size: number }[] = [];
     for (const f of files.slice(0, n)) {
       const r = await one<{ id: string }>(
-        "insert into photos (event_id, guest_id, content_type, declared_bytes, mission_id, tags) values ($1, $2, $3, $4, $5, $6) returning id",
-        [e.id, guestId, f.type, f.size, f.mission && valid.has(f.mission) ? f.mission : null, e.cfg.features.tags ? cleanTags(f.tags) : []],
+        "insert into photos (event_id, guest_id, content_type, declared_bytes, mission_id, tags, caption) values ($1, $2, $3, $4, $5, $6, $7) returning id",
+        [e.id, guestId, f.type, f.size, f.mission && valid.has(f.mission) ? f.mission : null, e.cfg.features.tags ? cleanTags(f.tags) : [], cleanCaption(f.caption)],
         c,
       );
       rows.push({ id: r!.id, type: f.type, size: f.size });
@@ -99,7 +99,7 @@ export type GalleryPhoto = {
   voted: boolean;
   mission: string | null;
   tags: string[];
-  comments: number;
+  caption: string | null;
 };
 
 type Row = {
@@ -114,7 +114,7 @@ type Row = {
   voted: boolean;
   mission_id: string | null;
   tags: string[];
-  comment_count: number;
+  caption: string | null;
 };
 
 function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto {
@@ -135,7 +135,7 @@ function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto
     voted: r.voted,
     mission: r.mission_id,
     tags: r.tags ?? [],
-    comments: r.comment_count ?? 0,
+    caption: r.caption ?? null,
   };
 }
 
@@ -182,7 +182,7 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   }
   if (opts.since && !Number.isNaN(Date.parse(opts.since))) where += ` and p.ready_at > $${params.push(opts.since)}::timestamptz`;
   const rows = await q<Row>(
-    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags, p.comment_count,
+    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags, p.caption,
        exists (select 1 from photo_votes v where v.photo_id = p.id and v.guest_id = ${viewerParam}) as voted
      from photos p left join guests g on g.id = p.guest_id
      where ${where} order by ${order} limit ${limit + 1} offset ${offset}`,
@@ -193,6 +193,22 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   const last = page.at(-1);
   const next = !more || !last ? null : opts.order === "top" ? `o:${offset + limit}` : `${new Date(last.ready_at).toISOString()}|${last.id}`;
   return { photos: page.map((r) => toGallery(eventId, r, viewer)), next };
+}
+
+/** One line, no markup, at most 140 characters; empty = no caption. */
+export function cleanCaption(raw: unknown) {
+  const s = String(raw ?? "").replace(/[\x00-\x1f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+  return s || null;
+}
+
+/** The guest who shared a photo sets or clears its caption. */
+export async function setCaption(eventId: string, guestId: string, photoId: string, caption: unknown) {
+  if (!UUID.test(photoId)) return null;
+  const r = await one<{ caption: string | null }>(
+    "update photos set caption = $4 where id = $1 and event_id = $2 and guest_id = $3 and status in ('ready','review') returning caption",
+    [photoId, eventId, guestId, cleanCaption(caption)],
+  );
+  return r ? { caption: r.caption } : null;
 }
 
 /** Organiser removes a photo: storage goes now, counters follow. */

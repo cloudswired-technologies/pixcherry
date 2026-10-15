@@ -34,7 +34,8 @@ test("dashboard screens", async ({ browser }) => {
       ["photos", "/photos"],
       ["guests", "/guests"],
       ["missions", "/missions"],
-      ["comments", "/comments"],
+      ["wishes", "/wishes"],
+      ["settings", "/settings"],
     ]) {
       await p.goto(`/dashboard/events/${id}${path}`);
       await p.waitForLoadState("networkidle");

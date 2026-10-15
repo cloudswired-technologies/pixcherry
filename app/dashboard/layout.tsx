@@ -33,11 +33,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       cover: coverUrl(e),
       review: waiting.get(e.id) ?? 0,
       guestUrl: e.paid_at && !e.purged_at ? guestUrl(e.slug) : null,
-      features: { missions: f.missions, wishes: f.wishes, comments: f.comments },
+      features: { missions: f.missions, wishes: f.wishes },
     };
   });
   return (
-    <DashShell user={{ email: user.email, isAdmin: user.is_admin }} events={list}>
+    <DashShell user={{ email: user.email, name: user.name, isAdmin: user.is_admin }} events={list}>
       {children}
     </DashShell>
   );

@@ -34,11 +34,12 @@ export async function savePlan(id: string | null, _: AdminState, fd: FormData): 
   const code = String(fd.get("code") ?? "").trim().toLowerCase();
   const name = String(fd.get("name") ?? "").trim().slice(0, 60);
   const price = money(fd.get("price"));
-  const preset = uuid(fd.get("quality_preset_id"));
+  // Photo quality is the same for every package now (best quality, fast upload); the
+  // column just keeps pointing at an existing preset.
+  const preset = (await one<{ id: string }>("select id from quality_presets order by sort, name limit 1"))?.id ?? null;
   if (!/^[a-z0-9-]{2,40}$/.test(code)) return { error: "Code: 2–40 lowercase letters, numbers or dashes." };
   if (!name) return { error: "Name is required." };
   if (price === null) return { error: "Enter a valid price." };
-  if (!preset) return { error: "Choose a photo quality." };
   const limits: Record<string, number> = {};
   for (const l of LIMITS) {
     const n = int(fd.get(`limit_${l.key}`));
@@ -86,33 +87,6 @@ export async function savePlan(id: string | null, _: AdminState, fd: FormData): 
   redirect(`/admin/plans/${id}?saved=1`);
 }
 
-// ------------------------------------------------------------------ quality presets
-
-export async function savePreset(id: string | null, _: AdminState, fd: FormData): Promise<AdminState> {
-  const admin = await requireAdmin();
-  const name = String(fd.get("name") ?? "").trim().slice(0, 60);
-  const maxPx = int(fd.get("max_px"));
-  const quality = int(fd.get("jpeg_quality"));
-  if (!name) return { error: "Name is required." };
-  if (maxPx !== null && (Number.isNaN(maxPx) || maxPx < 640 || maxPx > 12000)) return { error: "Max size: 640–12000 px, or empty for original." };
-  if (quality === null || Number.isNaN(quality) || quality < 50 || quality > 100) return { error: "JPEG quality: 50–100." };
-  const sort = int(fd.get("sort")) || 0;
-  if (id) await q("update quality_presets set name=$2, max_px=$3, jpeg_quality=$4, sort=$5 where id=$1", [id, name, maxPx, quality, sort]);
-  else await q("insert into quality_presets (name, max_px, jpeg_quality, sort) values ($1,$2,$3,$4)", [name, maxPx, quality, sort]);
-  await audit(admin.id, "preset.save", id, { name, max_px: maxPx, jpeg_quality: quality });
-  revalidatePath("/admin/quality");
-  return { ok: "Saved. Packages using this preset apply it to events paid from now on." };
-}
-
-export async function deletePreset(id: string) {
-  const admin = await requireAdmin();
-  const used = await one("select 1 from plans where quality_preset_id = $1 limit 1", [id]);
-  if (used) return;
-  await q("delete from quality_presets where id = $1", [id]);
-  await audit(admin.id, "preset.delete", id);
-  revalidatePath("/admin/quality");
-}
-
 // ------------------------------------------------------------------ add-ons
 
 export async function saveAddon(id: string | null, _: AdminState, fd: FormData): Promise<AdminState> {
@@ -129,7 +103,7 @@ export async function saveAddon(id: string | null, _: AdminState, fd: FormData):
   if (id) await q("update plan_addons set kind=$2, name=$3, amount=$4, price_cents=$5, is_active=$6, sort=$7 where id=$1", [id, ...vals]);
   else await q("insert into plan_addons (kind, name, amount, price_cents, is_active, sort) values ($1,$2,$3,$4,$5,$6)", vals);
   await audit(admin.id, "addon.save", id, { kind, amount, price_cents: price });
-  revalidatePath("/admin/addons");
+  revalidatePath("/admin/plans");
   return { ok: "Saved." };
 }
 
@@ -186,11 +160,6 @@ export async function saveOverrides(eventId: string, _: AdminState, fd: FormData
     if (v === "on") ov.features![f.key] = true;
     if (v === "off") ov.features![f.key] = false;
   }
-  const presetId = uuid(fd.get("quality_preset_id"));
-  if (presetId) {
-    const p = await one<{ name: string; max_px: number | null; jpeg_quality: number }>("select name, max_px, jpeg_quality from quality_presets where id = $1", [presetId]);
-    if (p) ov.quality = p;
-  }
   const note = String(fd.get("note") ?? "").trim().slice(0, 500);
   if (note) ov.note = note;
   await tx(async (c) => {
@@ -199,7 +168,7 @@ export async function saveOverrides(eventId: string, _: AdminState, fd: FormData
     await audit(admin.id, "event.overrides", eventId, ov, c);
   });
   revalidatePath(`/admin/events/${eventId}`);
-  return { ok: "Overrides saved. Deletion date recalculated." };
+  return { ok: "Saved for this event. Deletion date recalculated." };
 }
 
 export async function activateEvent(eventId: string, _: AdminState, fd: FormData): Promise<AdminState> {

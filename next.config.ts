@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // lib/storage.ts has a dynamic local-storage path, so the tracer pulls in the
   // whole project folder. Never ship local data, credentials notes or test files.
+  // The caption-on-download renderer reads this font at runtime (the server has no fonts).
+  outputFileTracingIncludes: {
+    "/api/e/[slug]/photos/[id]/download": ["./assets/fonts/PlusJakartaSans.ttf"],
+  },
   outputFileTracingExcludes: {
     "/*": [
       "./*.txt",

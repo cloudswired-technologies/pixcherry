@@ -87,7 +87,8 @@ test("A to Z on a phone", async ({ browser }) => {
   await o.goto(`/admin/events/${id}`);
   await o.locator('select[name="plan_id"]').selectOption(premium.id);
   await o.getByRole("button", { name: "Activate" }).click();
-  await expect(o.getByText("Event activated")).toBeVisible();
+  // Activated: the page now offers "Adjust this event" instead of activation.
+  await expect(o.getByRole("heading", { name: "Adjust this event" })).toBeVisible();
   await shot(o, "admin-event");
   const [ev] = await sql("select slug from events where id = $1", [id]);
   await o.goto(`/dashboard/events/${id}/engage`);
@@ -136,24 +137,24 @@ test("A to Z on a phone", async ({ browser }) => {
   await g2.getByRole("button", { name: /Selfie with the couple/ }).first().click();
   await g2.getByLabel("Your name").fill("Amir");
   await g2.getByRole("button", { name: /Let's go/ }).click();
-  const cam = g2.getByRole("dialog", { name: "Camera" });
-  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
-  for (const look of ["Disposable", "Cinematic", "Y2K Digicam", "Polaroid"]) {
-    await cam.getByRole("button", { name: look }).click();
-    await shot(g2, `camera-${look.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+  // Snap = the phone's own camera; the test hands it a photo, then the "develop" screen.
+  await expect(g2.getByRole("button", { name: "You: Amir" })).toBeVisible();
+  await g2.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: photos[0] });
+  const dev = g2.getByRole("dialog", { name: "Your photo" });
+  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
+  for (const look of ["Natural", "Disposable", "Cinematic", "Y2K Digicam", "Polaroid"]) {
+    await dev.getByRole("button", { name: look }).click();
+    await shot(g2, `develop-${look.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
   }
-  await cam.getByRole("button", { name: "Kodak Gold" }).click();
-  await cam.getByRole("button", { name: "Take photo" }).click();
-  await expect(cam.getByAltText("Your photo")).toBeVisible();
-  await cam.getByRole("button", { name: "#selfie" }).click();
-  await cam.getByLabel("Add your own hashtag").fill("bestday");
-  await cam.getByLabel("Add your own hashtag").press("Enter");
-  await expect(cam.getByRole("button", { name: "#bestday" })).toHaveAttribute("aria-pressed", "true");
-  await shot(g2, "camera-review");
-  await cam.getByRole("button", { name: "Share" }).click();
-  await expect(cam.getByAltText("Last shot")).toBeVisible();
-  await cam.getByRole("button", { name: "Back to album" }).click();
-  await expect(cam).toHaveCount(0);
+  await dev.getByRole("button", { name: "Kodak Gold" }).click();
+  await dev.getByRole("button", { name: "#selfie" }).click();
+  await dev.getByLabel("Add your own hashtag").fill("bestday");
+  await dev.getByLabel("Add your own hashtag").press("Enter");
+  await expect(dev.getByRole("button", { name: "#bestday" })).toHaveAttribute("aria-pressed", "true");
+  await dev.getByLabel("Caption").fill("With the happy couple!");
+  await shot(g2, "develop-ready");
+  await dev.getByRole("button", { name: "Share" }).click();
+  await expect(dev).toHaveCount(0);
   await g2.getByRole("button", { name: "Wishes" }).last().click();
   await g2.getByRole("textbox").fill("Selamat pengantin baru Aina & Hakim! Semoga bahagia hingga ke Jannah 🤍");
   await shot(g2, "guest-wish-sheet");
@@ -223,9 +224,18 @@ test("A to Z on a phone", async ({ browser }) => {
   await tv.close();
 
   // ------------------------------------------------------------------ admin
-  for (const p of ["/admin", "/admin/plans", "/admin/events", "/admin/settings"]) {
+  for (const [name, p] of [
+    ["admin-overview", "/admin"],
+    ["admin-packages", "/admin/plans"],
+    ["admin-addons", "/admin/plans?tab=addons"],
+    ["admin-events", "/admin/events"],
+    ["admin-event", `/admin/events/${id}`],
+    ["admin-settings", "/admin/settings"],
+    ["organiser-home", "/dashboard"],
+    ["organiser-account", "/dashboard/account"],
+  ]) {
     await o.goto(p);
-    await shot(o, `admin${p.replace(/\//g, "-")}`);
+    await shot(o, name);
   }
 
   // ------------------------------------------------------------------ delete

@@ -20,8 +20,7 @@ export type FeatureKey =
   | "wishes"
   | "voting"
   | "missions"
-  | "tags"
-  | "comments";
+  | "tags";
 
 export const LIMITS: { key: LimitKey; label: string; help: string; min: number; max: number; fallback: number; unit: string; pricing?: (n: number) => string }[] = [
   { key: "photos_per_guest", label: "Photos per guest", help: "How many photos one guest (one phone) can upload.", min: 1, max: 10000, fallback: 20, unit: "photos", pricing: (n) => `${n.toLocaleString("en-MY")} photos per guest` },
@@ -38,11 +37,10 @@ export const FEATURES: { key: FeatureKey; label: string; help: string; pricing: 
   { key: "hide_powered_by", label: "Hide \"Powered by PixCherry\"", help: "Removes the PixCherry footer from the guest page.", pricing: "No PixCherry branding" },
   { key: "moderation", label: "Photo approval", help: "Organiser can choose to approve photos before guests see them.", pricing: "Approve photos before they show" },
   { key: "slideshow", label: "Live slideshow", help: "Full-screen slideshow page for a projector or TV.", pricing: "Live slideshow for the big screen" },
-  { key: "camera", label: "Disposable camera", help: "In-app camera with film filters and a shots-left counter. Organiser can make it the only way to upload.", pricing: "Disposable camera with film filters" },
+  { key: "camera", label: "Snap with film looks", help: "Guests snap with their phone camera, then pick a film look, mission, hashtags and caption before sharing. Organiser can allow only new snaps (no gallery uploads).", pricing: "Snap with 13 film looks" },
   { key: "wishes", label: "Wishes wall", help: "Guests leave messages for the hosts, shown on the guest page and slideshow.", pricing: "Wishes wall for the hosts" },
   { key: "voting", label: "Hearts & leaderboard", help: "Guests heart photos; Top photos and Top snappers leaderboards.", pricing: "Hearts and live leaderboard" },
   { key: "tags", label: "Hashtags", help: "Guests tag photos with one tap (#reception, #family…); Highlights shows an album per hashtag.", pricing: "Hashtag albums" },
-  { key: "comments", label: "Photo comments", help: "Guests comment under each photo, Instagram style. Organiser can remove comments.", pricing: "Comments on every photo" },
   { key: "missions", label: "Snap missions", help: "Organiser sets photo challenges; guests tick them off.", pricing: "Snap missions (photo challenges)" },
 ];
 

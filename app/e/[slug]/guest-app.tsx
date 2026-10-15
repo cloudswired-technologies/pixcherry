@@ -27,14 +27,13 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { Turnstile } from "@/components/turnstile";
-import type { Quality } from "@/lib/client/compress";
 import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
 import { deviceSignals } from "@/lib/client/device";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
-import { DisposableCamera } from "./camera";
+import { Develop, PHOTO_JPEG, PHOTO_MAX_PX } from "./develop";
 import { BestMoments, Stories, type Moment } from "./highlights";
 import { InstallGuide, useInstall } from "./install";
 import {
@@ -58,7 +57,7 @@ import {
 import { useGallery, type GalleryFilter } from "./use-gallery";
 import { Viewer } from "./viewer";
 
-type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; comments: boolean; slideshow: boolean };
+type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; slideshow: boolean };
 type TagAlbum = { tag: string; count: number; cover: string | null };
 type Joined = { id: string; name: string | null; uploaded: number; blocked: boolean };
 
@@ -89,7 +88,6 @@ type Props = {
   canUpload: boolean;
   guest: Joined | null;
   limits: { perGuest: number; maxBytes: number };
-  quality: Quality;
   initial: { photos: GalleryPhoto[]; next: string | null; count: number };
   missions: MissionInfo[];
   missionsDone: string[];
@@ -126,7 +124,9 @@ export function GuestApp(p: Props) {
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
   // The viewer follows a photo id: new photos arriving at the top must not shift what's on screen.
   const [open, setOpen] = useState<{ list: "all" | "album"; id: string } | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  // A photo from the phone's own camera, waiting in the "develop" screen.
+  const [shot, setShot] = useState<File | null>(null);
+  const snap = useRef<HTMLInputElement>(null);
   const [mission, setMission] = useState<string | null>(null);
   const [joinFor, setJoinFor] = useState<Pending>(null);
   const [wishOpen, setWishOpen] = useState(false);
@@ -198,7 +198,8 @@ export function GuestApp(p: Props) {
 
   const up = useUploader({
     slug: p.slug,
-    quality: p.quality,
+    // Same for every package: the best quality that still uploads fast.
+    quality: { maxPx: PHOTO_MAX_PX, jpeg: Math.round(PHOTO_JPEG * 100) },
     maxBytes: p.limits.maxBytes,
     remaining: Math.max(0, p.limits.perGuest - (joined?.uploaded ?? 0)),
     onUploaded: () => {
@@ -313,7 +314,7 @@ export function GuestApp(p: Props) {
       if (kind === "wish") return setWishOpen(true);
       if (kind === "camera" && f.camera) {
         setMission(m);
-        return setCameraOpen(true);
+        return snap.current?.click();
       }
       setPickMissionId(m);
       pick.current?.click();
@@ -328,13 +329,16 @@ export function GuestApp(p: Props) {
       const next = joinFor;
       setJoinFor(null);
       if (!next || next.kind === "join") return;
-      setTimeout(() => {
-        if (next.kind === "wish") setWishOpen(true);
-        else if (next.kind === "camera" && f.camera) {
-          setMission(next.mission ?? null);
-          setCameraOpen(true);
-        } else if (next.kind === "upload") flash("You're in! Tap Upload to pick your photos 📸"); // iOS blocks file pickers not opened by a tap
-      }, 50);
+      if (next.kind === "wish") return void setTimeout(() => setWishOpen(true), 50);
+      // Android still counts the "Let's go" tap and opens the camera/picker; iOS needs one more tap.
+      if (next.kind === "camera" && f.camera) {
+        setMission(next.mission ?? null);
+        snap.current?.click();
+        flash("You're in! Tap Snap to take your photo 📸");
+      } else if (next.kind === "upload") {
+        pick.current?.click();
+        flash("You're in! Tap Upload to pick your photos 📸");
+      }
     },
     [joinFor, f.camera, flash],
   );
@@ -830,23 +834,39 @@ export function GuestApp(p: Props) {
         </div>
       ) : null}
 
-      {cameraOpen ? (
-        <DisposableCamera
-          onClose={() => setCameraOpen(false)}
-          onShot={(file, tags) => up.add([file], { mission, prepared: true, tags })}
-          suggestedTags={f.tags ? p.suggestedTags : null}
-          onFallback={() => {
+      {/* Snap opens the phone's own camera (best quality, zoom, HDR); "develop" adds the look. */}
+      <input
+        ref={snap}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        aria-label="Take a photo"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) setShot(file);
+        }}
+      />
+      {shot ? (
+        <Develop
+          key={shot.name + shot.lastModified}
+          file={shot}
+          onClose={() => setShot(null)}
+          onRetake={() => snap.current?.click()}
+          onShare={(file, extra) => {
+            up.add([file], { mission, prepared: true, tags: extra.tags, caption: extra.caption });
             history.back();
-            setPickMissionId(mission);
-            pick.current?.click();
+            setOrder("new");
+            goTab("all");
           }}
           shotsLeft={shotsLeft}
-          quality={p.quality}
           maxBytes={p.limits.maxBytes}
           missions={hasMissions ? stats.missions : []}
           mission={mission}
           onMission={setMission}
-          caption={p.event.name}
+          suggestedTags={f.tags ? p.suggestedTags : null}
+          eventName={p.event.name}
         />
       ) : null}
 
@@ -906,19 +926,13 @@ export function GuestApp(p: Props) {
           voting={f.voting}
           onVote={vote}
           missions={missionMap}
-          comments={
-            f.comments
-              ? {
-                  joined: !!joined,
-                  canWrite: !joined?.blocked,
-                  myName: joined?.name ?? null,
-                  onNeedJoin: () => setJoinFor({ kind: "join" }),
-                  onCount: (id, n) => {
-                    all.patchPhoto(id, { comments: n });
-                    albumGallery.patchPhoto(id, { comments: n });
-                  },
+          onCaption={
+            joined && !joined.blocked
+              ? (id, caption) => {
+                  all.patchPhoto(id, { caption });
+                  albumGallery.patchPhoto(id, { caption });
                 }
-              : null
+              : undefined
           }
           onTag={(t) => {
             history.back();
@@ -1120,7 +1134,7 @@ function YouPanel({
                 <Pencil className="size-4" aria-hidden />
               </button>
             </div>
-            <div className="text-xs text-muted-foreground">Shown next to your photos, wishes and comments.</div>
+            <div className="text-xs text-muted-foreground">Shown next to your photos and wishes.</div>
           </div>
         )}
       </div>

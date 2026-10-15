@@ -55,36 +55,38 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(g.getByRole("heading", { name: "🎯 Snap missions" })).toBeVisible();
   await expect(g.getByText("0/8")).toBeVisible();
 
-  // Tap a mission -> join -> camera opens on that mission.
+  // Tap a mission -> join -> the phone's own camera opens (here: the test hands it a photo)
+  // -> "develop": pick a look and a caption, then share.
   await g.getByRole("button", { name: /Selfie with the couple/ }).first().click();
   await g.getByLabel("Your name").fill("Amir");
   await g.getByRole("button", { name: /Let's go/ }).click();
-  const cam = g.getByRole("dialog", { name: "Camera" });
-  const counter = cam.locator('[aria-live="polite"]');
-  await expect(cam).toBeVisible();
-  await expect(counter).toContainText("20");
-  await cam.getByRole("button", { name: "Noir" }).click();
-  await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
-  // Review step: retake costs nothing, share uses a shot.
-  await cam.getByRole("button", { name: "Take photo" }).click();
-  await expect(cam.getByAltText("Your photo")).toBeVisible();
-  await cam.getByRole("button", { name: "Retake" }).click();
-  await expect(counter).toContainText("20");
-  await cam.getByRole("button", { name: "Take photo" }).click();
-  await cam.getByRole("button", { name: "Share" }).click();
-  await expect(counter).toContainText("19");
-  await expect(cam.getByAltText("Last shot")).toBeVisible();
-  await cam.getByRole("button", { name: "Back to album" }).click();
-  await expect(cam).toHaveCount(0);
+  await expect(g.getByRole("button", { name: "You: Amir" })).toBeVisible();
+  const colour = await sharp({ create: { width: 1600, height: 1200, channels: 3, background: "#3d8be8" } }).jpeg().toBuffer();
+  await g.locator("input[capture]").setInputFiles({ name: "snap.jpg", mimeType: "image/jpeg", buffer: colour });
+  const dev = g.getByRole("dialog", { name: "Your photo" });
+  await expect(dev.getByRole("img", { name: "Photo preview" })).toBeVisible();
+  await expect(dev.locator('[aria-live="polite"]')).toContainText("20");
+  await expect(dev.getByRole("button", { name: /Selfie with the couple/ })).toHaveClass(/bg-brand/); // the mission tapped
+  await dev.getByRole("button", { name: "Noir" }).click();
+  await dev.getByLabel("Caption").fill("Best seat in the house");
+  await dev.getByRole("button", { name: "Share" }).click();
+  await expect(dev).toHaveCount(0);
 
   // Upload done + worker -> mission ticked, photo in gallery, filter applied (Noir = greyscale).
+  await g.getByRole("button", { name: "Highlights" }).click(); // sharing jumps to All Photos
   await expect(g.getByText("1/8")).toBeVisible({ timeout: 60_000 });
   await g.getByRole("button", { name: "All Photos", exact: true }).click();
   await expect(g.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 60_000 });
-  const [shot] = await sql("select id, mission_id, width from photos where event_id = $1 and status = 'ready'", [ev.id]);
+  const [shot] = await sql("select id, mission_id, width, height, caption from photos where event_id = $1 and status = 'ready'", [ev.id]);
   expect(shot.mission_id).toBe(missions[0].id);
+  expect(shot.caption).toBe("Best seat in the house");
   const full = await g.request.get(`/api/e/${slug}/photos/${shot.id}/download`);
-  const stats = await sharp(await full.body()).stats();
+  const body = await full.body();
+  // The download carries the caption in a strip under the photo.
+  const meta = await sharp(body).metadata();
+  expect(meta.width).toBe(shot.width);
+  expect(meta.height!).toBeGreaterThan(shot.height);
+  const stats = await sharp(body).extract({ left: 0, top: 0, width: shot.width, height: shot.height }).stats();
   const [r, gr, b] = stats.channels;
   expect(Math.abs(r.mean - gr.mean)).toBeLessThan(3); // greyscale: channels match
   expect(Math.abs(gr.mean - b.mean)).toBeLessThan(3);

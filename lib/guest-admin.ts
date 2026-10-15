@@ -14,7 +14,6 @@ export type GuestRow = {
   photos: number;
   hearts: number;
   wishes: number;
-  comments: number;
   same_phone_as: string | null;
   same_phone_name: string | null;
 };
@@ -24,34 +23,26 @@ export async function listGuests(eventId: string) {
     `select g.id, g.name, g.created_at, g.last_seen_at, g.is_blocked, g.same_phone_as, o.name as same_phone_name,
        (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos,
        (select coalesce(sum(p.vote_count), 0)::int from photos p where p.guest_id = g.id and p.status = 'ready') as hearts,
-       (select count(*)::int from wishes w where w.guest_id = g.id) as wishes,
-       (select count(*)::int from photo_comments c where c.guest_id = g.id) as comments
+       (select count(*)::int from wishes w where w.guest_id = g.id) as wishes
      from guests g left join guests o on o.id = g.same_phone_as
      where g.event_id = $1 order by g.created_at desc limit 2000`,
     [eventId],
   );
 }
 
-/** Removes a guest and everything they added (photos, wishes, comments, hearts). Frees their guest slot. */
+/** Removes a guest and everything they added (photos, wishes, hearts). Frees their guest slot. */
 export async function removeGuest(eventId: string, guestId: string) {
   const g = await one<{ id: string }>("select id from guests where id = $1 and event_id = $2", [guestId, eventId]);
   if (!g) return false;
   const photos = await q<{ id: string }>("select id from photos where guest_id = $1 and status in ('ready','review')", [guestId]);
   for (const p of photos) await deletePhoto(eventId, p.id);
   await tx(async (c) => {
-    // Their hearts and comments on other people's photos go too; keep the counters right.
+    // Their hearts on other people's photos go too; keep the counters right.
     await q(
       "update photos p set vote_count = greatest(0, p.vote_count - 1) from photo_votes v where v.photo_id = p.id and v.guest_id = $1",
       [guestId],
       c,
     );
-    await q(
-      `update photos p set comment_count = greatest(0, p.comment_count - x.n)
-       from (select photo_id, count(*)::int n from photo_comments where guest_id = $1 group by photo_id) x where x.photo_id = p.id`,
-      [guestId],
-      c,
-    );
-    await q("delete from photo_comments where guest_id = $1", [guestId], c);
     await q("delete from wishes where guest_id = $1", [guestId], c);
     await q("delete from guests where id = $1", [guestId], c); // votes cascade
     await q("update events set guest_count = greatest(0, guest_count - 1) where id = $1", [eventId], c);
@@ -76,7 +67,6 @@ export async function mergeGuests(eventId: string, fromId: string, intoId: strin
     if (!from || !into) return false;
     await q("update photos set guest_id = $2 where guest_id = $1", [fromId, intoId], c);
     await q("update wishes set guest_id = $2, name = $3 where guest_id = $1", [fromId, intoId, into.name], c);
-    await q("update photo_comments set guest_id = $2, name = $3 where guest_id = $1", [fromId, intoId, into.name], c);
     // A heart from both on the same photo counts once.
     await q(
       `update photos p set vote_count = greatest(0, p.vote_count - 1) from photo_votes v

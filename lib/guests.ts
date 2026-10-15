@@ -147,7 +147,7 @@ export async function findSamePhone(eventId: string, name: string | null, device
 
 /**
  * Names are unique per album (ignoring case), so People folders, leaderboards and
- * comments never show two "Shukry". Returns a free suggestion when taken.
+ * captions never show two "Shukry". Returns a free suggestion when taken.
  */
 export async function nameClash(eventId: string, name: string, exceptGuestId?: string) {
   const taken = await q<{ n: string }>(
@@ -180,9 +180,8 @@ export async function continueAsGuest(eventId: string, guestId: string) {
 
 export async function renameGuest(guestId: string, name: string | null) {
   await q("update guests set name = $2 where id = $1", [guestId, name]);
-  // Wishes and comments keep a copy of the name; follow the change.
+  // Wishes keep a copy of the name; follow the change.
   await q("update wishes set name = $2 where guest_id = $1", [guestId, name]);
-  await q("update photo_comments set name = $2 where guest_id = $1", [guestId, name]);
 }
 
 export function cleanName(raw: unknown) {

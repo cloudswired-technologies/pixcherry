@@ -16,7 +16,6 @@ import { rateLimit } from "@/lib/rate-limit";
 import { audit } from "@/lib/settings";
 import { deleteObject, deletePrefix, putObject } from "@/lib/storage";
 import { purgeEvent } from "@/lib/jobs";
-import { deleteComment } from "@/lib/comments";
 import { mergeGuests, removeGuest } from "@/lib/guest-admin";
 
 export type FormState = { error?: string; ok?: string };
@@ -310,12 +309,6 @@ export async function toggleWish(id: string, wishId: string, hidden: boolean) {
   const { user, e } = await managed(id);
   await setWishHidden(e.id, wishId, hidden);
   await audit(user.id, hidden ? "wish.hide" : "wish.show", e.id, { wish: wishId });
-  revalidatePath(`/dashboard/events/${e.id}`, "layout");
-}
-
-export async function removeComment(id: string, commentId: string) {
-  const { user, e } = await managed(id);
-  if (await deleteComment(e.id, commentId, null)) await audit(user.id, "comment.delete", e.id, { comment: commentId });
   revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 

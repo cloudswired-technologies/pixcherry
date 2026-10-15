@@ -30,26 +30,31 @@ async function* files(e: Pick<EventRow, "id">) {
   // One folder per guest ("Siti-3f2a/0001.jpg"); the id suffix keeps two Sitis apart.
   let cursor: { at: Date; id: string } | null = null;
   const perGuest = new Map<string, number>();
+  // Captions go in captions.txt at the end ("Siti-3f2a/0001.jpg — Best day ever").
+  const captions: string[] = [];
   for (;;) {
-    const rows: { id: string; ready_at: Date; name: string | null; guest_id: string | null }[] = await q(
-      `select p.id, p.ready_at, g.name, p.guest_id from photos p left join guests g on g.id = p.guest_id
+    const rows: { id: string; ready_at: Date; name: string | null; guest_id: string | null; caption: string | null }[] = await q(
+      `select p.id, p.ready_at, g.name, p.guest_id, p.caption from photos p left join guests g on g.id = p.guest_id
        where p.event_id = $1 and p.status = 'ready' ${cursor ? "and (p.ready_at, p.id) > ($2, $3)" : ""}
        order by p.ready_at, p.id limit 200`,
       cursor ? [e.id, cursor.at, cursor.id] : [e.id],
     );
-    if (!rows.length) return;
+    if (!rows.length) break;
     for (const r of rows) {
       const stream = await getObjectStream(photoKeys(e.id, r.id).full);
       if (!stream) continue;
       const folder = r.guest_id ? `${safe(r.name ?? "Guest")}-${r.guest_id.slice(0, 4)}` : "Organiser";
       const n = (perGuest.get(folder) ?? 0) + 1;
       perGuest.set(folder, n);
-      yield { input: stream, name: `${folder}/${String(n).padStart(4, "0")}.jpg`, lastModified: r.ready_at };
+      const name = `${folder}/${String(n).padStart(4, "0")}.jpg`;
+      if (r.caption) captions.push(`${name} — ${r.caption} (${r.name ?? "a guest"})`);
+      yield { input: stream, name, lastModified: r.ready_at };
     }
     const last = rows[rows.length - 1];
-    if (cursor && last.id === cursor.id) return; // cursor did not move: never loop
+    if (cursor && last.id === cursor.id) break; // cursor did not move: never loop
     cursor = { at: last.ready_at, id: last.id };
   }
+  if (captions.length) yield { input: new TextEncoder().encode(captions.join("\n") + "\n"), name: "captions.txt", lastModified: new Date() };
 }
 
 export function albumResponse(e: Pick<EventRow, "id" | "name">) {

@@ -4,20 +4,18 @@ import { requireAdmin } from "@/lib/auth";
 export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" } };
 
 const NAV: NavItem[] = [
-  { href: "/admin", label: "Overview", icon: "gauge", exact: true },
-  { href: "/admin/events", label: "Events", icon: "events" },
-  { href: "/admin/plans", label: "Packages", icon: "plans" },
-  { href: "/admin/quality", label: "Photo quality", icon: "quality" },
-  { href: "/admin/addons", label: "Add-ons", icon: "addons" },
-  { href: "/admin/promos", label: "Promo codes", icon: "promos" },
-  { href: "/admin/settings", label: "Settings", icon: "settings" },
-  { href: "/admin/logs", label: "Logs", icon: "logs" },
+  { href: "/admin", label: "Overview", icon: "gauge", exact: true, group: "Insights" },
+  { href: "/admin/events", label: "Events", icon: "events", group: "Business" },
+  { href: "/admin/plans", label: "Packages & add-ons", icon: "plans", group: "Business" },
+  { href: "/admin/promos", label: "Promo codes", icon: "promos", group: "Business" },
+  { href: "/admin/settings", label: "Settings", icon: "settings", group: "System" },
+  { href: "/admin/logs", label: "Logs", icon: "logs", group: "System" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin();
   return (
-    <DashShell user={{ email: user.email, isAdmin: true }} admin={NAV}>
+    <DashShell user={{ email: user.email, name: user.name, isAdmin: true }} admin={NAV}>
       {children}
     </DashShell>
   );

@@ -91,7 +91,6 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
         missions: f.missions,
         albumDownload: f.guest_album_download,
         tags: f.tags,
-        comments: f.comments,
         slideshow: f.slideshow,
       }}
       suggestedTags={suggestedTags(e)}
@@ -99,7 +98,6 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       canUpload={uploadsOpen(e, e.cfg)}
       guest={guest ? { id: guest.id, name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
       limits={{ perGuest: e.cfg.limits.photos_per_guest, maxBytes: e.cfg.limits.max_file_mb * 1024 * 1024 }}
-      quality={{ maxPx: e.cfg.quality.max_px, jpeg: e.cfg.quality.jpeg_quality }}
       initial={{ ...first, count: e.photo_count }}
       missions={missions}
       missionsDone={done}

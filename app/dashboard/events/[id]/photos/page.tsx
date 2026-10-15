@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Heart, MessageCircle, Trash2, X } from "lucide-react";
+import { Check, Heart, Trash2, X } from "lucide-react";
 import { Confirm } from "@/components/confirm";
 import { Card, LinkButton, Notice, PageHeader, cn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -14,7 +14,7 @@ export const metadata = { title: "Photos" };
 
 const PAGE = 24;
 const UUID = /^[0-9a-f-]{36}$/;
-const SORTS = { new: "Newest", top: "Most loved", talk: "Most comments", old: "Oldest" } as const;
+const SORTS = { new: "Newest", top: "Most loved", captioned: "With captions", old: "Oldest" } as const;
 type Sort = keyof typeof SORTS;
 
 type SP = { view?: string; page?: string; sort?: string; guest?: string; mission?: string; tag?: string };
@@ -38,11 +38,12 @@ export default async function Photos({ params, searchParams }: { params: Promise
   if (guest) where += ` and p.guest_id = $${params2.push(guest)}::uuid`;
   if (mission) where += ` and p.mission_id = $${params2.push(mission)}::uuid`;
   if (tag) where += ` and $${params2.push(tag)} = any(p.tags)`;
-  const order = { new: "p.ready_at desc nulls last", old: "p.ready_at asc", top: "p.vote_count desc, p.ready_at desc", talk: "p.comment_count desc, p.ready_at desc" }[sort];
+  const order = { new: "p.ready_at desc nulls last", old: "p.ready_at asc", top: "p.vote_count desc, p.ready_at desc", captioned: "p.ready_at desc nulls last" }[sort];
+  if (sort === "captioned") where += " and p.caption is not null";
 
   const [rows, count, guestName, missions, tags] = await Promise.all([
-    q<{ id: string; status: string; ready_at: Date | null; guest_id: string | null; name: string | null; vote_count: number; comment_count: number; tags: string[]; emoji: string | null }>(
-      `select p.id, p.status, p.ready_at, p.guest_id, g.name, p.vote_count, p.comment_count, p.tags, m.emoji
+    q<{ id: string; status: string; ready_at: Date | null; guest_id: string | null; name: string | null; vote_count: number; caption: string | null; tags: string[]; emoji: string | null }>(
+      `select p.id, p.status, p.ready_at, p.guest_id, g.name, p.vote_count, p.caption, p.tags, m.emoji
        from photos p left join guests g on g.id = p.guest_id left join event_missions m on m.id = p.mission_id
        where ${where} order by ${order}, p.id desc limit ${PAGE + 1} offset ${(page - 1) * PAGE}`,
       params2,
@@ -141,16 +142,11 @@ export default async function Photos({ params, searchParams }: { params: Promise
                 <img src={publicUrl(photoKeys(e.id, p.id).sm)} alt={p.name ? `Photo by ${p.name}` : "Event photo"} loading="lazy" className="aspect-square w-full bg-muted object-cover" />
                 {p.emoji ? <span className="absolute left-2 top-2 rounded-full bg-white/90 px-1.5 text-sm">{p.emoji}</span> : null}
                 {p.status === "review" ? <span className="absolute right-2 top-2 rounded-full bg-warn px-2 py-0.5 text-[11px] font-bold text-white">To approve</span> : null}
-                {p.vote_count || p.comment_count ? (
+                {p.vote_count ? (
                   <span className="absolute bottom-2 right-2 inline-flex items-center gap-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                     {p.vote_count ? (
                       <span className="inline-flex items-center gap-1">
                         <Heart className="size-3 fill-white" aria-hidden /> {p.vote_count}
-                      </span>
-                    ) : null}
-                    {p.comment_count ? (
-                      <span className="inline-flex items-center gap-1">
-                        <MessageCircle className="size-3" aria-hidden /> {p.comment_count}
                       </span>
                     ) : null}
                   </span>
@@ -186,6 +182,7 @@ export default async function Photos({ params, searchParams }: { params: Promise
                   </div>
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">
+                  {p.caption ? <span className="mb-0.5 block whitespace-normal text-xs text-foreground line-clamp-2">“{p.caption}”</span> : null}
                   {p.ready_at ? formatDateTime(p.ready_at) : "Processing"}
                   {p.tags?.length ? ` · ${p.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Ban, Combine, Heart, Images, MessageCircle, MessageCircleHeart, Smartphone, Trash2 } from "lucide-react";
+import { Ban, Combine, Heart, Images, MessageCircleHeart, Smartphone, Trash2 } from "lucide-react";
 import { Confirm } from "@/components/confirm";
 import { Badge, Card, PageHeader, cn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -116,9 +116,6 @@ export default async function Guests({ params, searchParams }: { params: Promise
                 <span className="inline-flex items-center gap-1" title="Wishes">
                   <MessageCircleHeart className="size-4" aria-hidden /> {g.wishes}
                 </span>
-                <span className="inline-flex items-center gap-1" title="Comments">
-                  <MessageCircle className="size-4" aria-hidden /> {g.comments}
-                </span>
               </div>
               <div className="flex gap-1.5">
                 <Confirm
@@ -134,7 +131,7 @@ export default async function Guests({ params, searchParams }: { params: Promise
                 <Confirm
                   action={removeGuestNow.bind(null, e.id, g.id)}
                   title={`Remove ${g.name ?? "this guest"}?`}
-                  message={`Their ${g.photos} photo${g.photos === 1 ? "" : "s"}, ${g.wishes} wish${g.wishes === 1 ? "" : "es"} and ${g.comments} comment${g.comments === 1 ? "" : "s"} are deleted, and their guest slot is freed. This can't be undone.`}
+                  message={`Their ${g.photos} photo${g.photos === 1 ? "" : "s"} and ${g.wishes} wish${g.wishes === 1 ? "" : "es"} are deleted, and their guest slot is freed. This can't be undone.`}
                   confirm="Remove guest"
                   label={`Remove ${g.name ?? "guest"}`}
                   className="inline-flex h-8 items-center gap-1 rounded-full bg-danger-soft px-3 text-xs font-semibold text-danger"

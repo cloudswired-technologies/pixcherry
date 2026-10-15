@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, CloudUpload, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { ArrowRight, Check, CloudUpload, Heart, Loader2, Send, X } from "lucide-react";
 import type { GalleryPhoto } from "@/lib/photos";
 import type { Gallery } from "./use-gallery";
 
@@ -90,16 +90,11 @@ export function Masonry({
               <img src={ph.sm} alt={ph.by ? `Photo by ${ph.by}` : "Event photo"} loading="lazy" decoding="async" className="size-full object-cover" />
               {ph.status === "review" ? <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">Waiting approval</span> : null}
               {m ? <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs shadow-soft">{m.emoji ?? "🎯"}</span> : null}
-              {ph.votes > 0 || ph.comments > 0 ? (
+              {ph.votes > 0 ? (
                 <span className="absolute bottom-2 right-2 inline-flex items-center gap-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
                   {ph.votes > 0 ? (
                     <span className="inline-flex items-center gap-1">
                       <Heart className={`size-3 ${ph.voted ? "fill-brand text-brand" : ""}`} aria-hidden /> {ph.votes}
-                    </span>
-                  ) : null}
-                  {ph.comments > 0 ? (
-                    <span className="inline-flex items-center gap-1">
-                      <MessageCircle className="size-3" aria-hidden /> {ph.comments}
                     </span>
                   ) : null}
                 </span>

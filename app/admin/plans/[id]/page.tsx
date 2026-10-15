@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { PlanCard } from "@/components/plan-card";
-import { Card, Field, Input, Notice, PageHeader, Select, Textarea, Toggle } from "@/components/ui";
+import { Card, Field, Input, Notice, Textarea, Toggle } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { one } from "@/lib/db";
 import { storageCostMyr, typicalPhotoBytes } from "@/lib/costs";
 import { formatBytes, formatMoney } from "@/lib/format";
 import { FEATURES, LIMITS, normaliseFeatures, normaliseLimits } from "@/lib/plan-schema";
-import { getPlan, listPresets, type Plan } from "@/lib/plans";
+import { getPlan, type Plan } from "@/lib/plans";
 import { savePlan } from "../../actions";
 
 export const metadata = { title: "Package" };
@@ -21,31 +21,32 @@ export default async function PlanEdit({ params, searchParams }: { params: Promi
   const isNew = id === "new";
   const plan = isNew ? null : await getPlan(id);
   if (!isNew && !plan) notFound();
-  const presets = await listPresets();
   const limits = plan?.limits ?? normaliseLimits({});
   const features = plan?.features ?? normaliseFeatures({});
-  const preset = presets.find((p) => p.id === plan?.quality_preset_id) ?? presets[0];
 
-  // Real average stored size per photo for this preset, if we have data.
+  // Real average stored size per photo for this package, if we have data.
   const avg = plan
     ? await one<{ avg: number | null }>(
         "select avg(p.bytes)::float as avg from photos p join events e on e.id = p.event_id where e.plan_id = $1 and p.bytes is not null",
         [plan.id],
       )
     : null;
-  const perPhoto = avg?.avg ?? typicalPhotoBytes(preset?.max_px ?? null);
+  const perPhoto = avg?.avg ?? typicalPhotoBytes(3072);
   const fullBytes = perPhoto * limits.max_photos;
   const months = (limits.retention_days + 2) / 30;
 
   return (
     <div className="grid gap-6">
-      <Link href="/admin/plans" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <Link href="/admin/plans" className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" aria-hidden /> Packages
       </Link>
-      <PageHeader title={isNew ? "New package" : plan!.name} />
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">{isNew ? "New package" : plan!.name}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Changes apply to events paid from now on. Paid events keep what they bought.</p>
+      </div>
       {saved ? <Notice tone="ok">Saved.</Notice> : null}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
+        <Card className="rounded-3xl p-6">
           <ActionForm action={savePlan.bind(null, isNew ? null : plan!.id)} submit={isNew ? "Create package" : "Save package"}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Name" htmlFor="name">
@@ -57,21 +58,12 @@ export default async function PlanEdit({ params, searchParams }: { params: Promi
               <Field label="Price (RM)" htmlFor="price">
                 <Input id="price" name="price" inputMode="decimal" required defaultValue={plan ? (plan.price_cents / 100).toFixed(2) : ""} />
               </Field>
-              <Field label="Photo quality" htmlFor="quality_preset_id" help={<Link href="/admin/quality" className="underline">Manage quality presets</Link>}>
-                <Select id="quality_preset_id" name="quality_preset_id" defaultValue={plan?.quality_preset_id ?? preset?.id}>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.max_px ? `${p.max_px}px` : "original size"}, JPEG {p.jpeg_quality})
-                    </option>
-                  ))}
-                </Select>
-              </Field>
             </div>
             <Field label="Description" htmlFor="description">
               <Input id="description" name="description" maxLength={300} defaultValue={plan?.description} />
             </Field>
 
-            <h3 className="mt-2 font-bold">Limits</h3>
+            <h3 className="mt-4 border-t border-border pt-5 text-lg font-bold">Limits</h3>
             <div className="grid gap-4 sm:grid-cols-2">
               {LIMITS.map((l) => (
                 <Field key={l.key} label={`${l.label} (${l.unit})`} htmlFor={`limit_${l.key}`} help={l.help}>
@@ -80,7 +72,7 @@ export default async function PlanEdit({ params, searchParams }: { params: Promi
               ))}
             </div>
 
-            <h3 className="mt-2 font-bold">Features</h3>
+            <h3 className="mt-4 border-t border-border pt-5 text-lg font-bold">Features</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               {FEATURES.map((f) => (
                 <Toggle key={f.key} name={`feature_${f.key}`} label={f.label} help={f.help} defaultChecked={features[f.key]} />
@@ -99,9 +91,9 @@ export default async function PlanEdit({ params, searchParams }: { params: Promi
             </div>
           </ActionForm>
         </Card>
-        <div className="grid content-start gap-4">
+        <div className="grid content-start gap-4 xl:sticky xl:top-8">
           {plan ? <PlanCard plan={plan as Plan} compact /> : null}
-          <Card className="grid gap-1 text-sm">
+          <Card className="grid gap-1 rounded-3xl text-sm">
             <div className="font-bold">Cost check</div>
             <p className="text-muted-foreground">
               About {formatBytes(perPhoto)} per photo{avg?.avg ? " (from real uploads)" : " (estimate)"}. A completely full album is {formatBytes(fullBytes)} and costs about{" "}

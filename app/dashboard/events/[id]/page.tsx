@@ -6,13 +6,13 @@ import { CopyButton } from "@/components/copy-button";
 import { Meter, PhaseBadge } from "@/components/event-bits";
 import { Card, LinkButton, Notice, btn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { recentComments } from "@/lib/comments";
 import { one, q } from "@/lib/db";
 import { eventStats, listMissions, listWishes, missionBoard } from "@/lib/engage";
 import { coverUrl, getManagedEvent, guestUrl } from "@/lib/events";
 import { formatBytes, formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
+import { photoKeys, publicUrl } from "@/lib/storage";
 import { getSetting } from "@/lib/settings";
 import { deleteDraft } from "../actions";
 
@@ -86,16 +86,19 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   const url = guestUrl(e.slug);
   const lim = e.cfg.limits;
   const f = e.cfg.features;
-  const [stats, totals, missions, board, wishes, comments, recent, purchases, warnDays] = await Promise.all([
+  const [stats, totals, missions, board, wishes, captions, recent, purchases, warnDays] = await Promise.all([
     eventStats(e.id),
-    one<{ hearts: number; comments: number }>(
-      "select coalesce(sum(vote_count), 0)::int hearts, coalesce(sum(comment_count), 0)::int comments from photos where event_id = $1 and status = 'ready'",
+    one<{ hearts: number; captions: number }>(
+      "select coalesce(sum(vote_count), 0)::int hearts, count(caption)::int captions from photos where event_id = $1 and status = 'ready'",
       [e.id],
     ),
     f.missions ? listMissions(e.id) : Promise.resolve([]),
     f.missions ? missionBoard(e.id) : Promise.resolve(null),
     f.wishes ? listWishes(e.id, { limit: 3 }) : Promise.resolve([]),
-    f.comments ? recentComments(e.id, 3) : Promise.resolve([]),
+    q<{ id: string; caption: string; name: string | null }>(
+      "select p.id, p.caption, g.name from photos p left join guests g on g.id = p.guest_id where p.event_id = $1 and p.status = 'ready' and p.caption is not null order by p.ready_at desc limit 4",
+      [e.id],
+    ),
     listPhotos(e.id, { order: "new", limit: 8 }),
     q<{ id: string; description: string; amount_cents: number; receipt_no: string; paid_at: Date }>(
       "select id, description, amount_cents, receipt_no, paid_at from purchases where event_id = $1 and status = 'paid' order by paid_at desc",
@@ -172,7 +175,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
         <Tile icon={Images} label="Photographers" value={stats.guests.toLocaleString("en-MY")} sub="guests who shared" />
         <Tile icon={Heart} label="Hearts" value={(totals?.hearts ?? 0).toLocaleString("en-MY")} sub={f.voting ? "on all photos" : "not in package"} tone="brand" />
         <Tile icon={MessageCircleHeart} label="Wishes" value={stats.wishes.toLocaleString("en-MY")} sub={f.wishes ? "on the wall" : "not in package"} />
-        <Tile icon={MessageCircle} label="Comments" value={(totals?.comments ?? 0).toLocaleString("en-MY")} sub={f.comments ? "under photos" : "not in package"} />
+        <Tile icon={MessageCircle} label="Captions" value={(totals?.captions ?? 0).toLocaleString("en-MY")} sub="photos with a caption" />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -325,7 +328,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
         </Card>
       </div>
 
-      {wishes.length || comments.length ? (
+      {wishes.length || captions.length ? (
         <div className="grid gap-6 lg:grid-cols-2">
           {f.wishes ? (
             <Card>
@@ -344,22 +347,24 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
               )}
             </Card>
           ) : null}
-          {f.comments ? (
-            <Card>
-              <SectionHead title="💬 Latest comments" href={`${base}/comments`} />
-              {comments.length ? (
-                <ul className="grid gap-2">
-                  {comments.map((c) => (
-                    <li key={c.id} className="rounded-xl bg-background p-3 text-sm">
-                      <strong>{c.name ?? "Guest"}</strong> {c.body}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">No comments yet.</p>
-              )}
-            </Card>
-          ) : null}
+          <Card>
+            <SectionHead title="💬 Latest captions" href={`${base}/photos`} link="All photos" />
+            {captions.length ? (
+              <ul className="grid gap-2">
+                {captions.map((c) => (
+                  <li key={c.id} className="flex items-center gap-3 rounded-xl bg-background p-2.5 text-sm">
+                    <img src={publicUrl(photoKeys(e.id, c.id).sm)} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+                    <span className="min-w-0">
+                      <span className="line-clamp-2">{c.caption}</span>
+                      <span className="text-xs font-semibold text-brand">— {c.name ?? "A guest"}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No captions yet. Guests add them when they share a photo.</p>
+            )}
+          </Card>
         </div>
       ) : null}
 

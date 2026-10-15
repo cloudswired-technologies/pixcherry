@@ -36,7 +36,7 @@ export function LinkButton({ variant = "primary", size = "md", className, ...p }
 }
 
 export function Card({ className, ...p }: ComponentProps<"div">) {
-  return <div {...p} className={cn("rounded-2xl border border-border bg-card p-5 shadow-soft", className)} />;
+  return <div {...p} className={cn("rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-6", className)} />;
 }
 
 export function Input({ className, ...p }: ComponentProps<"input">) {
@@ -74,7 +74,7 @@ export function Field({ label, help, children, htmlFor }: { label: string; help?
 export function Toggle({ name, label, help, defaultChecked, disabled }: { name: string; label: string; help?: ReactNode; defaultChecked?: boolean; disabled?: boolean }) {
   return (
     <label className={cn("flex items-start gap-3 rounded-xl border border-border bg-card p-3", disabled ? "opacity-60" : "cursor-pointer")}>
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} disabled={disabled} className="mt-0.5 size-5 shrink-0 accent-ink" />
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} disabled={disabled} className="mt-0.5 size-5 shrink-0 accent-brand" />
       <span className="grid gap-0.5">
         <span className="text-sm font-semibold">{label}</span>
         {help ? <span className="text-xs text-muted-foreground">{help}</span> : null}
@@ -97,8 +97,8 @@ export function Badge({ tone = "neutral", children }: { tone?: keyof typeof BADG
 
 export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+    <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-bold tracking-tight">{value}</div>
       {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
@@ -114,7 +114,7 @@ export function PageHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
         {sub ? <p className="mt-1 text-sm text-muted-foreground">{sub}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}

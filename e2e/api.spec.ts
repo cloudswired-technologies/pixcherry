@@ -51,7 +51,11 @@ test("API rejects bad uploads and frees quota", async ({ browser, request }) => 
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto(`/e/${ev.slug}`);
-  await page.getByRole("button", { name: "Upload" }).click();
+  // A tap before the page is interactive does nothing, so retry until the join sheet opens.
+  await expect(async () => {
+    await page.getByRole("button", { name: "Upload" }).click();
+    await expect(page.getByRole("button", { name: /Let's go/ })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   await page.getByRole("button", { name: /Let's go/ }).click();
   await expect(page.getByText(/You have\s*3\s*shots left/)).toBeVisible();
   const api = page.request;

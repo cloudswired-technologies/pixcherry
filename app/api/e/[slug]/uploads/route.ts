@@ -21,6 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     size: Number(f.size),
     mission: typeof f.mission === "string" ? f.mission : null,
     tags: (f as { tags?: unknown }).tags,
+    caption: (f as { caption?: unknown }).caption,
   }));
   if (!files.length) return NextResponse.json({ error: "No files." }, { status: 400 });
 

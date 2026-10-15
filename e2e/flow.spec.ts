@@ -110,7 +110,7 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await expect(guest.getByAltText("Photo by Siti")).toHaveCount(3, { timeout: 60_000 });
   const photos = await sql("select status, width, height, bytes from photos where event_id = $1 and status = 'ready' order by width desc", [ev.id]);
   expect(photos).toHaveLength(3);
-  expect(photos[0].width).toBe(2048); // 4000px resized on the phone to the Basic preset
+  expect(photos[0].width).toBe(3072); // 4000px resized on the phone (same quality for every package)
 
   // viewer + single download
   await guest.getByAltText("Photo by Siti").first().click();
@@ -144,11 +144,11 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   const adminCtx = await browser.newContext();
   const admin = await adminCtx.newPage();
   await login(admin, "admin@example.com", `/admin/events/${ev.id}`);
-  await expect(admin.getByRole("heading", { name: "Overrides for this event" })).toBeVisible();
+  await expect(admin.getByRole("heading", { name: "Adjust this event" })).toBeVisible();
   await admin.locator('input[name="limit_photos_per_guest"]').fill("4");
   await admin.locator('input[name="note"]').fill("e2e test");
-  await admin.getByRole("button", { name: "Save overrides" }).click();
-  await expect(admin.getByText("Overrides saved")).toBeVisible();
+  await admin.getByRole("button", { name: "Save changes for this event" }).click();
+  await expect(admin.getByText("Saved for this event")).toBeVisible();
   await guest.reload();
   await expect(guest.getByText(/You have\s*1\s*shot left/)).toBeVisible();
   await guest.locator("input[type=file][multiple]").setInputFiles(files.slice(0, 2));

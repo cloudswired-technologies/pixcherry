@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, Download, Heart, Loader2, MessageCircle, Share2, X, ZoomIn } from "lucide-react";
+import { Check, ChevronLeft, Download, Heart, Loader2, Pencil, Share2, X, ZoomIn } from "lucide-react";
 import type { GalleryPhoto } from "@/lib/photos";
-import { CommentPreview, CommentsSheet, useComments } from "./comments";
 import { initial } from "./panels";
 
 type MissionMap = Map<string, { title: string; emoji: string | null }>;
@@ -21,11 +20,11 @@ export function Viewer({
   onFolder,
   total,
   onTag,
-  comments,
+  onCaption,
 }: {
   onTag?: (tag: string) => void;
-  /** Comments on: who's commenting, and how to report a new count back to the gallery. */
-  comments?: { joined: boolean; canWrite: boolean; myName: string | null; onNeedJoin: () => void; onCount: (photoId: string, n: number) => void } | null;
+  /** Caption saved for one of my photos: update the gallery. Absent = captions can't be edited here. */
+  onCaption?: (photoId: string, caption: string | null) => void;
   slug: string;
   photos: GalleryPhoto[];
   index: number;
@@ -43,16 +42,16 @@ export function Viewer({
   const strip = useRef<HTMLDivElement>(null);
   const [burst, setBurst] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
-  const [talk, setTalk] = useState(false);
+  // Editing my caption: { id, text } of the photo being captioned.
+  const [edit, setEdit] = useState<{ id: string; text: string; busy?: boolean } | null>(null);
   // Zoom shows the full-size file (previews are lighter); pinch or the magnifier opens it.
   const [zoom, setZoom] = useState<string | null>(null);
-  const talkRef = useRef(false);
+  const editRef = useRef(false);
   const zoomRef = useRef(false);
   useEffect(() => {
-    talkRef.current = talk;
+    editRef.current = edit !== null;
     zoomRef.current = zoom !== null;
-  }, [talk, zoom]);
-  const thread = useComments(slug, photos[index]?.id ?? "", !!comments && (talk || (photos[index]?.comments ?? 0) > 0));
+  }, [edit, zoom]);
   const go = (i: number) => {
     if (i < 0 || i >= photos.length) return;
     setDir(i > index ? 1 : -1);
@@ -79,8 +78,8 @@ export function Viewer({
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return zoomRef.current ? setZoom(null) : talkRef.current ? setTalk(false) : history.back();
-      if (talkRef.current) return;
+      if (e.key === "Escape") return zoomRef.current ? setZoom(null) : editRef.current ? setEdit(null) : history.back();
+      if (editRef.current) return;
       if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
       if (e.key === "ArrowRight" && index < photos.length - 1) onIndex(index + 1);
     };
@@ -99,6 +98,16 @@ export function Viewer({
     if (!voting || ph.status !== "ready") return;
     if (!ph.voted) setBurst((b) => b + 1);
     onVote(ph);
+  };
+  const saveCaption = async () => {
+    if (!edit || edit.busy) return;
+    setEdit({ ...edit, busy: true });
+    const r = await fetch(`/api/e/${slug}/photos/${edit.id}/caption`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ caption: edit.text }) }).catch(() => null);
+    if (r?.ok) {
+      const b = (await r.json()) as { caption: string | null };
+      onCaption?.(edit.id, b.caption);
+      setEdit(null);
+    } else setEdit({ ...edit, busy: false });
   };
   const share = async () => {
     const url = `${location.origin}/api/e/${slug}/photos/${ph.id}/download`;
@@ -198,7 +207,35 @@ export function Viewer({
             ))}
           </div>
         ) : null}
-        {comments ? <CommentPreview items={thread.items} count={ph.comments} onOpen={() => setTalk(true)} /> : null}
+        {edit && edit.id === ph.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              value={edit.text}
+              onChange={(e) => setEdit({ ...edit, text: e.target.value.slice(0, 140) })}
+              onKeyDown={(e) => e.key === "Enter" && saveCaption()}
+              autoFocus
+              placeholder="Say something about this photo…"
+              aria-label="Caption"
+              className="h-10 min-w-0 flex-1 rounded-full bg-white/12 px-4 text-sm outline-none placeholder:text-white/50"
+            />
+            <button type="button" onClick={saveCaption} disabled={edit.busy} className="grid size-10 place-items-center rounded-full bg-brand disabled:opacity-60" aria-label="Save caption">
+              {edit.busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Check className="size-5" aria-hidden />}
+            </button>
+          </div>
+        ) : ph.caption ? (
+          <p className="flex items-start gap-2 text-[15px] leading-snug">
+            <span className="min-w-0 flex-1 break-words">{ph.caption}</span>
+            {ph.mine && onCaption ? (
+              <button type="button" onClick={() => setEdit({ id: ph.id, text: ph.caption ?? "" })} className="grid size-8 shrink-0 place-items-center rounded-full bg-white/10" aria-label="Edit caption">
+                <Pencil className="size-4" aria-hidden />
+              </button>
+            ) : null}
+          </p>
+        ) : ph.mine && onCaption ? (
+          <button type="button" onClick={() => setEdit({ id: ph.id, text: "" })} className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold">
+            <Pencil className="size-4" aria-hidden /> Add a caption
+          </button>
+        ) : null}
         <div ref={strip} className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {photos.map((p, i) => (
             <button key={p.id} type="button" data-i={i} onClick={() => go(i)} className={`size-12 shrink-0 overflow-hidden rounded-lg border-2 ${i === index ? "border-white" : "border-transparent opacity-60"}`}>
@@ -218,32 +255,12 @@ export function Viewer({
               <Download className="size-6" aria-hidden />
             </a>
           ) : null}
-          {comments && ph.status === "ready" ? (
-            <button type="button" onClick={() => setTalk(true)} aria-label="Comments" className="inline-flex h-11 items-center gap-2 rounded-full px-4 font-semibold">
-              <MessageCircle className="size-6" aria-hidden />
-              {ph.comments}
-            </button>
-          ) : null}
           <button type="button" onClick={share} className="grid size-11 place-items-center rounded-full" aria-label="Share photo">
             <Share2 className="size-6" aria-hidden />
           </button>
         </div>
       </div>
       {zoom ? <ZoomView src={zoom} onClose={() => setZoom(null)} /> : null}
-      {talk && comments ? (
-        <CommentsSheet
-          slug={slug}
-          photoId={ph.id}
-          items={thread.items}
-          set={thread.set}
-          onClose={() => setTalk(false)}
-          canWrite={comments.canWrite}
-          joined={comments.joined}
-          myName={comments.myName}
-          onNeedJoin={comments.onNeedJoin}
-          onCount={(n) => comments.onCount(ph.id, n)}
-        />
-      ) : null}
     </div>
   );
 }

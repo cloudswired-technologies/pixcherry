@@ -1,116 +1,251 @@
 import Link from "next/link";
-import { PhaseBadge } from "@/components/event-bits";
-import { Card, Notice, PageHeader, Stat } from "@/components/ui";
+import { Activity, ArrowRight, Camera, CircleDollarSign, HardDrive, PartyPopper, Radio, UserPlus, Users } from "lucide-react";
+import { Bars, Delta, Donut, Kpi } from "@/components/charts";
+import { Card, Notice } from "@/components/ui";
+import { adminOverview } from "@/lib/admin-stats";
 import { requireAdmin } from "@/lib/auth";
-import { one, q } from "@/lib/db";
-import { formatBytes, formatDate, formatDateTime, formatMoney, hoursSince } from "@/lib/format";
-import { eventPhase } from "@/lib/limits";
 import { storageCostMyr } from "@/lib/costs";
+import { coverUrl } from "@/lib/events";
+import { formatBytes, formatDate, formatDateTime, formatMoney, hoursSince } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Overview" };
+
+const rm = (cents: number) => formatMoney(cents).replace(/\.00$/, "");
+
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: "Asia/Kuala_Lumpur" }));
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
+function Head({ title, href, link }: { title: string; href?: string; link?: string }) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-2">
+      <h2 className="text-lg font-bold">{title}</h2>
+      {href ? (
+        <Link href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-brand">
+          {link ?? "See all"} <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
 
 export default async function AdminOverview() {
-  await requireAdmin();
-  const [ev, photos, rev, queue, cron, upcomingDeletes, recent] = await Promise.all([
-    one<{ total: number; paid: number; active: number; ended: number; purged: number; drafts: number; bytes: string; guests: number }>(
-      `select count(*)::int as total,
-         count(*) filter (where paid_at is not null)::int as paid,
-         count(*) filter (where paid_at is not null and purged_at is null and now() <= ends_at + interval '2 days')::int as active,
-         count(*) filter (where paid_at is not null and purged_at is null and now() > ends_at + interval '2 days')::int as ended,
-         count(*) filter (where purged_at is not null)::int as purged,
-         count(*) filter (where paid_at is null)::int as drafts,
-         coalesce(sum(bytes_used), 0)::text as bytes,
-         coalesce(sum(guest_count), 0)::int as guests
-       from events`,
-    ),
-    one<{ live: number; all_time: number }>(
-      "select count(*) filter (where status in ('ready','review'))::int as live, count(*) filter (where ready_at is not null)::int as all_time from photos",
-    ),
-    one<{ total: number; month: number; count: number }>(
-      `select coalesce(sum(amount_cents), 0)::int as total,
-         coalesce(sum(amount_cents) filter (where paid_at >= date_trunc('month', now() at time zone 'Asia/Kuala_Lumpur') at time zone 'Asia/Kuala_Lumpur'), 0)::int as month,
-         count(*)::int as count
-       from purchases where status = 'paid'`,
-    ),
-    one<{ waiting: number; processing: number; failed24: number; pending: number }>(
-      `select count(*) filter (where status = 'uploaded')::int as waiting,
-         count(*) filter (where status = 'processing')::int as processing,
-         count(*) filter (where status in ('failed','rejected') and created_at > now() - interval '24 hours')::int as failed24,
-         count(*) filter (where status = 'pending')::int as pending
-       from photos where status in ('uploaded','processing','failed','rejected','pending')`,
-    ),
-    one<{ value: { at: string; stale: number; warned: number; purged: { events: number; objects: number }; drafts: number } }>("select value from settings where key = 'last_cron'"),
-    q<{ id: string; name: string; deletion_at: Date; photo_count: number }>(
-      "select id, name, deletion_at, photo_count from events where purged_at is null and paid_at is not null and deletion_at < now() + interval '7 days' order by deletion_at limit 10",
-    ),
-    q<{ id: string; name: string; starts_at: Date; ends_at: Date; paid_at: Date | null; purged_at: Date | null; photo_count: number; email: string }>(
-      "select e.id, e.name, e.starts_at, e.ends_at, e.paid_at, e.purged_at, e.photo_count, u.email from events e join users u on u.id = e.owner_id order by e.created_at desc limit 10",
-    ),
-  ]);
-  const bytes = Number(ev?.bytes ?? 0);
-  const cronAge = cron ? hoursSince(cron.value.at) : null;
+  const user = await requireAdmin();
+  const s = await adminOverview();
+  const bytes = Number(s.events?.bytes ?? 0);
+  const cronAge = s.cron ? hoursSince(s.cron.value.at) : null;
+  const queue = (s.queue?.waiting ?? 0) + (s.queue?.processing ?? 0);
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Overview" />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-brand">{new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kuala_Lumpur" })}</p>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            {greeting()}, {user.name?.split(" ")[0] ?? "there"} 👋
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Here&apos;s how PixCherry is doing.</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/admin/events" className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold hover:bg-muted">
+            All events
+          </Link>
+          <Link href="/admin/plans" className="inline-flex h-10 items-center gap-2 rounded-full bg-brand px-4 text-sm font-bold text-white shadow-cherry">
+            Packages
+          </Link>
+        </div>
+      </div>
+
       {cronAge === null || cronAge > 2 ? (
         <Notice tone="warn">
           The hourly cleanup job {cronAge === null ? "has never run" : `last ran ${Math.round(cronAge)} hours ago`}. Photos won&apos;t be deleted on time until it runs.
         </Notice>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Revenue (all time)" value={formatMoney(rev?.total ?? 0)} hint={`${rev?.count ?? 0} payments · ${formatMoney(rev?.month ?? 0)} this month`} />
-        <Stat label="Events" value={ev?.total ?? 0} hint={`${ev?.paid ?? 0} paid · ${ev?.drafts ?? 0} unpaid drafts`} />
-        <Stat label="Active events" value={ev?.active ?? 0} hint={`${ev?.ended ?? 0} ended (in storage) · ${ev?.purged ?? 0} deleted`} />
-        <Stat label="Photos stored" value={(photos?.live ?? 0).toLocaleString("en-MY")} hint={`${(photos?.all_time ?? 0).toLocaleString("en-MY")} processed all time · ${ev?.guests ?? 0} guests`} />
-        <Stat label="Storage used" value={formatBytes(bytes)} hint={`≈ ${storageCostMyr(bytes)} / month on R2`} />
-        <Stat label="Processing queue" value={(queue?.waiting ?? 0) + (queue?.processing ?? 0)} hint={`${queue?.processing ?? 0} in progress · ${queue?.pending ?? 0} uploading`} />
-        <Stat label="Failed / rejected (24 h)" value={queue?.failed24 ?? 0} hint="Unreadable or broken files" />
-        <Stat
-          label="Last cleanup"
-          value={cron ? formatDateTime(cron.value.at) : "Never"}
-          hint={cron ? `${cron.value.purged?.events ?? 0} events deleted · ${cron.value.warned ?? 0} warned · ${cron.value.stale ?? 0} stale uploads` : undefined}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          icon={CircleDollarSign}
+          label="Revenue · 30 days"
+          value={rm(s.money?.rev30 ?? 0)}
+          sub={<Delta now={s.money?.rev30 ?? 0} prev={s.money?.revprev ?? 0} />}
+          spark={s.revDays.map((d) => d.value)}
         />
+        <Kpi icon={PartyPopper} label="Paid events · 30 days" value={String(s.events?.paid30 ?? 0)} sub={<Delta now={s.events?.paid30 ?? 0} prev={s.events?.paidprev ?? 0} />} tone="amber" />
+        <Kpi
+          icon={Camera}
+          label="Photos shared · 30 days"
+          value={(s.photos?.n30 ?? 0).toLocaleString("en-MY")}
+          sub={<Delta now={s.photos?.n30 ?? 0} prev={s.photos?.nprev ?? 0} />}
+          spark={s.upDays.map((d) => d.value)}
+          tone="ok"
+        />
+        <Kpi icon={Users} label="Guests joined · 30 days" value={(s.guests?.n30 ?? 0).toLocaleString("en-MY")} sub={<Delta now={s.guests?.n30 ?? 0} prev={s.guests?.nprev ?? 0} />} tone="ink" />
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { icon: Radio, label: "Live right now", value: s.events?.live ?? 0, tone: "text-ok" },
+          { icon: PartyPopper, label: "Upcoming", value: s.events?.upcoming ?? 0, tone: "text-brand" },
+          { icon: UserPlus, label: "Organisers", value: `${s.users?.total ?? 0} (+${s.users?.n30 ?? 0})`, tone: "text-[#b45309]" },
+          { icon: HardDrive, label: `Storage · ${storageCostMyr(bytes)}/mo`, value: formatBytes(bytes), tone: "text-ink" },
+        ].map((x) => (
+          <div key={x.label} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+            <x.icon className={`size-5 shrink-0 ${x.tone}`} aria-hidden />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-muted-foreground">{x.label}</div>
+              <div className="text-lg font-extrabold">{x.value}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="rounded-3xl p-6">
+          <Head title="Revenue" />
+          <p className="-mt-2 mb-4 text-sm text-muted-foreground">
+            {rm(s.money?.rev30 ?? 0)} in the last 30 days · {rm(s.money?.revall ?? 0)} all time
+          </p>
+          <Bars data={s.revDays} format={(n) => rm(n)} />
+        </Card>
+        <Card className="rounded-3xl p-6">
+          <Head title="Photos shared" />
+          <p className="-mt-2 mb-4 text-sm text-muted-foreground">
+            {(s.photos?.n30 ?? 0).toLocaleString("en-MY")} in the last 30 days · {(s.photos?.stored ?? 0).toLocaleString("en-MY")} stored now
+          </p>
+          <Bars data={s.upDays} />
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card className="rounded-3xl p-6">
+          <Head title="🔴 Live now" href="/admin/events?status=live" />
+          {s.live.length ? (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {s.live.map((e) => {
+                const cover = coverUrl(e);
+                return (
+                  <li key={e.id}>
+                    <Link href={`/admin/events/${e.id}`} className="flex items-center gap-3 rounded-2xl border border-border p-3 hover:bg-muted/60">
+                      {cover ? <img src={cover} alt="" className="size-12 rounded-xl object-cover" /> : <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-xl">📸</span>}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{e.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {e.photo_count} photos · {e.guest_count} guests · ends {formatDateTime(e.ends_at)}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="rounded-2xl bg-canvas px-4 py-8 text-center text-sm text-muted-foreground">No events are happening right now.</p>
+          )}
+        </Card>
+        <Card className="rounded-3xl p-6">
+          <Head title="Package mix" />
+          <Donut parts={s.mix} center={`${s.events?.total_paid ?? 0} paid events`} />
+        </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="grid content-start gap-3">
-          <h2 className="font-bold">Recent events</h2>
-          <ul className="divide-y divide-border text-sm">
-            {recent.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-3 py-2">
-                <Link href={`/admin/events/${e.id}`} className="min-w-0">
-                  <span className="block truncate font-medium hover:underline">{e.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {e.email} · {formatDate(e.starts_at)}
+        <Card className="rounded-3xl p-6">
+          <Head title="Latest payments" href="/admin/events" />
+          {s.payments.length ? (
+            <ul className="divide-y divide-border">
+              {s.payments.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 py-2.5">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ok-soft text-ok">
+                    <CircleDollarSign className="size-4" aria-hidden />
                   </span>
-                </Link>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{e.photo_count}</span>
-                  <PhaseBadge phase={eventPhase(e)} />
+                  <Link href={`/admin/events/${p.event_id}`} className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{p.event}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {p.email} · {formatDateTime(p.paid_at)}
+                    </span>
+                  </Link>
+                  <span className="shrink-0 font-bold">{rm(p.amount_cents)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No payments yet.</p>
+          )}
+        </Card>
+        <Card className="rounded-3xl p-6">
+          <Head title="New organisers" />
+          <ul className="divide-y divide-border">
+            {s.signups.map((u) => (
+              <li key={u.id} className="flex items-center gap-3 py-2.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-bold uppercase text-brand">{(u.name ?? u.email).charAt(0)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{u.name ?? u.email}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {u.name ? `${u.email} · ` : ""}joined {formatDate(u.created_at)}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {u.paid}/{u.events} paid
                 </span>
               </li>
             ))}
           </ul>
         </Card>
-        <Card className="grid content-start gap-3">
-          <h2 className="font-bold">Deleting in the next 7 days</h2>
-          {upcomingDeletes.length ? (
-            <ul className="divide-y divide-border text-sm">
-              {upcomingDeletes.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-3 py-2">
-                  <Link href={`/admin/events/${e.id}`} className="truncate hover:underline">
-                    {e.name}
-                  </Link>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDate(e.deletion_at)} · {e.photo_count} photos
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nothing scheduled.</p>
-          )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="rounded-3xl p-6">
+          <Head title="Biggest albums" />
+          <ol className="grid gap-2">
+            {s.top.map((e, i) => (
+              <li key={e.id}>
+                <Link href={`/admin/events/${e.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/60">
+                  <span className="w-6 text-center text-sm font-bold text-muted-foreground">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{e.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{e.plan}</span>
+                  <span className="w-24 shrink-0 text-right text-sm font-semibold">{e.photo_count.toLocaleString("en-MY")} 📸</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </Card>
+        <Card className="rounded-3xl p-6">
+          <Head title="System health" />
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Processing queue", value: queue, hint: `${s.queue?.pending ?? 0} uploading`, bad: queue > 50 },
+              { label: "Failed · 24 h", value: s.queue?.failed24 ?? 0, hint: "unreadable files", bad: (s.queue?.failed24 ?? 0) > 10 },
+              { label: "Last cleanup", value: s.cron ? formatDateTime(s.cron.value.at) : "Never", hint: `${s.cron?.value.purged?.events ?? 0} albums deleted`, bad: cronAge === null || cronAge > 2 },
+              { label: "Unpaid drafts", value: s.events?.drafts ?? 0, hint: "auto-removed after 30 days", bad: false },
+            ].map((x) => (
+              <div key={x.label} className="rounded-2xl bg-canvas p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Activity className={`size-3.5 ${x.bad ? "text-danger" : "text-ok"}`} aria-hidden /> {x.label}
+                </div>
+                <div className="mt-1 truncate text-lg font-extrabold">{x.value}</div>
+                <div className="text-xs text-muted-foreground">{x.hint}</div>
+              </div>
+            ))}
+          </div>
+          {s.deleting.length ? (
+            <div className="mt-4">
+              <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Deleting in the next 7 days</div>
+              <ul className="grid gap-1 text-sm">
+                {s.deleting.map((e) => (
+                  <li key={e.id} className="flex justify-between gap-2">
+                    <Link href={`/admin/events/${e.id}`} className="truncate hover:underline">
+                      {e.name}
+                    </Link>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(e.deletion_at)} · {e.photo_count} photos
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>

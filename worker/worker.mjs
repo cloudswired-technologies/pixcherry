@@ -22,7 +22,9 @@ const MAX_ATTEMPTS = 3;
 // Larger images are refused. Decoding needs ~3 bytes per pixel, so keep this
 // in line with the server RAM (50 MP ≈ 150 MB; phones shoot 12–48 MP).
 const MAX_PIXELS = Number(process.env.WORKER_MAX_PIXELS ?? 50_000_000);
-const DEFAULT_QUALITY = { name: "Standard", max_px: 2048, jpeg_quality: 80 };
+// One quality for every package (matches the phone: app/e/[slug]/develop.tsx):
+// the best photo that still uploads fast.
+const QUALITY = { max_px: 3072, jpeg_quality: 88 };
 
 sharp.cache(false);
 sharp.concurrency(1); // one libvips thread per photo; parallelism comes from CONCURRENCY
@@ -55,10 +57,9 @@ async function claim() {
 function eventSettings(e) {
   const snap = e.plan_snapshot ?? {};
   const ov = e.overrides ?? {};
-  const quality = ov.quality ?? snap.quality ?? DEFAULT_QUALITY;
   const maxMb = Number(ov.limits?.max_file_mb ?? snap.limits?.max_file_mb ?? 15);
   const moderation = (ov.features?.moderation ?? snap.features?.moderation) === true;
-  return { quality, maxBytes: maxMb * 1024 * 1024, review: moderation && e.require_approval };
+  return { quality: QUALITY, maxBytes: maxMb * 1024 * 1024, review: moderation && e.require_approval };
 }
 
 class Reject extends Error {}
