@@ -29,15 +29,15 @@ export async function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           {user ? (
-            <LinkButton href="/dashboard" prefetch={false} size="sm" variant="brand">
+            <LinkButton href="/dashboard" size="sm" variant="brand">
               My events
             </LinkButton>
           ) : (
             <>
-              <Link href="/login" prefetch={false} className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-muted sm:inline-flex">
+              <Link href="/login" className="hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-muted sm:inline-flex">
                 Log in
               </Link>
-              <LinkButton href="/dashboard/events/new" prefetch={false} size="sm" variant="brand" className="hidden sm:inline-flex">
+              <LinkButton href="/dashboard/events/new" size="sm" variant="brand" className="hidden sm:inline-flex">
                 Create event
               </LinkButton>
             </>
@@ -54,10 +54,10 @@ export async function SiteHeader() {
               ))}
               {!user ? (
                 <>
-                  <Link href="/login" prefetch={false} className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-muted">
+                  <Link href="/login" className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-muted">
                     Log in
                   </Link>
-                  <LinkButton href="/dashboard/events/new" prefetch={false} variant="brand" className="mt-1">
+                  <LinkButton href="/dashboard/events/new" variant="brand" className="mt-1">
                     Create your event
                   </LinkButton>
                 </>

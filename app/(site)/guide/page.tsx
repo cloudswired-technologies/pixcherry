@@ -174,7 +174,7 @@ export default function Guide() {
                 Questions first? Read the <Link href="/#faq" className="font-semibold underline">FAQ</Link>.
               </p>
             </div>
-            <LinkButton href="/dashboard/events/new" prefetch={false} variant="brand" size="lg">
+            <LinkButton href="/dashboard/events/new" variant="brand" size="lg">
               Create your event <ArrowRight aria-hidden />
             </LinkButton>
           </div>
