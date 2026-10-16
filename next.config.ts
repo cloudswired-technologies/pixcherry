@@ -19,7 +19,8 @@ const nextConfig: NextConfig = {
   // whole project folder. Never ship local data, credentials notes or test files.
   // The caption-on-download renderer reads this font at runtime (the server has no fonts).
   outputFileTracingIncludes: {
-    "/api/e/[slug]/photos/[id]/download": ["./assets/fonts/PlusJakartaSans-700.woff", "./assets/fonts/PlusJakartaSans-500.woff"],
+    "/api/e/[slug]/photos/[id]/download": ["./assets/fonts/*.woff"],
+    "/api/events/[id]/card": ["./assets/fonts/*.woff"],
   },
   outputFileTracingExcludes: {
     "/*": [

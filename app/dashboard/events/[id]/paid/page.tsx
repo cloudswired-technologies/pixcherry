@@ -39,9 +39,31 @@ export default async function Paid({ params, searchParams }: { params: Promise<{
             <p className="text-sm text-muted-foreground">
               {p.description} for &ldquo;{e.name}&rdquo;{p.amount_cents ? ` · ${formatMoney(p.amount_cents)}` : ""}. Your QR code is ready.
             </p>
-            <LinkButton href={`/dashboard/events/${e.id}`} variant="brand" size="lg">
-              Get your QR code
-            </LinkButton>
+            <ol className="mt-2 grid w-full gap-2 text-left text-sm">
+              {[
+                ["🎨", "Make it yours", "Add a cover photo, venue and missions."],
+                ["📸", "Try the guest app", "Scan the QR with your phone and snap the first photo."],
+                ["🖨️", "Share the QR card", "Download the PDF for the tables or send the image on WhatsApp."],
+              ].map(([icon, t, d], i) => (
+                <li key={t} className="flex gap-3 rounded-2xl bg-canvas p-3">
+                  <span className="text-xl">{icon}</span>
+                  <span>
+                    <span className="block font-bold">
+                      {i + 1}. {t}
+                    </span>
+                    <span className="text-muted-foreground">{d}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-2 grid w-full gap-2">
+              <LinkButton href={`/dashboard/events/${e.id}/qr`} variant="brand" size="lg">
+                Get your QR code
+              </LinkButton>
+              <LinkButton href={`/dashboard/events/${e.id}`} variant="outline" size="lg">
+                Go to your event
+              </LinkButton>
+            </div>
           </>
         ) : status === "failed" ? (
           <>

@@ -11,6 +11,12 @@ export const asPhone = (ctx: BrowserContext, id: number) =>
   ctx.addInitScript((v) => {
     // The join matches screen + GPU/cores, so give each "phone" its own screen width and core count.
     Object.defineProperty(Navigator.prototype, "hardwareConcurrency", { get: () => v, configurable: true });
+    // Tests drive the album directly; the first-visit intro has its own test.
+    try {
+      localStorage.setItem("pc-skip-intro", "1");
+    } catch {
+      /* about:blank */
+    }
     Object.defineProperty(Screen.prototype, "width", { get: () => 300 + (v % 997), configurable: true });
   }, id);
 

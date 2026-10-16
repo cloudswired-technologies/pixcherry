@@ -102,10 +102,11 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         d.starts,
         d.ends,
         fd.get("ask_guest_name") === "on",
-        fd.get("uploads_enabled") === "on",
+        // "How guests add photos": both | camera | closed.
+        fd.get("photo_mode") !== "closed",
         e.cfg.features.moderation && fd.get("require_approval") === "on",
         branding && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null,
-        e.cfg.features.camera && fd.get("camera_only") === "on",
+        e.cfg.features.camera && fd.get("photo_mode") === "camera",
         d.venue,
         d.thankYou,
         d.tags,

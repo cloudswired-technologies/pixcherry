@@ -7,8 +7,11 @@ import { suggestedTags } from "@/lib/tags";
 import { coverUrl, getEventBySlug, guestPath, guestUrl, logoUrl, renamedSlug } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 import { currentGuest, currentGuestKey } from "@/lib/guests";
+import { currentUser } from "@/lib/auth";
+import { APP_URL } from "@/lib/env";
 import { eventPhase, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
+import { publicUrl } from "@/lib/storage";
 import { turnstileSiteKey } from "@/lib/turnstile";
 import { GuestApp } from "./guest-app";
 
@@ -51,7 +54,9 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       </main>
     );
   }
-  const guest = await currentGuest(e.id);
+  const [guest, viewer] = await Promise.all([currentGuest(e.id), currentUser()]);
+  // The host (or an admin) looking at their own album: offer the way back.
+  const hostUrl = viewer && (viewer.id === e.owner_id || viewer.is_admin) ? `${APP_URL}/dashboard/events/${e.id}` : null;
   const f = e.cfg.features;
   const share = guestUrl(e.slug);
   const [first, missions, done, stats, tagAlbums, key, qr] = await Promise.all([
@@ -70,6 +75,7 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       shareUrl={share}
       qrSvg={qr}
       resumeKey={key}
+      hostUrl={hostUrl}
       event={{
         name: e.name,
         description: e.description,
@@ -96,7 +102,7 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       suggestedTags={suggestedTags(e)}
       tagAlbums={tagAlbums}
       canUpload={uploadsOpen(e, e.cfg)}
-      guest={guest ? { id: guest.id, name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked } : null}
+      guest={guest ? { id: guest.id, name: guest.name, uploaded: guest.upload_count, blocked: guest.is_blocked, avatar: guest.avatar_key ? publicUrl(guest.avatar_key) : null } : null}
       limits={{ perGuest: e.cfg.limits.photos_per_guest, maxBytes: e.cfg.limits.max_file_mb * 1024 * 1024 }}
       initial={{ ...first, count: e.photo_count }}
       missions={missions}

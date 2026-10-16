@@ -124,7 +124,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                       </Link>
                       {e.paid_at ? (
                         <a href={guestUrl(e.slug)} target="_blank" rel="noreferrer" className={btn("outline", "sm", "flex-1")}>
-                          Guest page
+                          Guest app
                         </a>
                       ) : (
                         <Link href={`/dashboard/events/${e.id}/checkout`} className={btn("brand", "sm", "flex-1")}>

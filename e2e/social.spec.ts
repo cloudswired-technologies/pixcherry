@@ -362,5 +362,54 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await dev.getByRole("button", { name: "Share" }).click();
   await expect(dev).toHaveCount(0);
 
-  for (const c of [c1, c2, c3, c4, c5, c6, c7, c8]) await c.close();
+  // ---------------------------------------------------------------- first visit: intro, then join with a selfie
+  const c10 = await browser.newContext(PHONE);
+  await asPhone(c10, 9191);
+  const g10 = await c10.newPage();
+  await g10.addInitScript(() => localStorage.removeItem("pc-skip-intro"));
+  await g10.goto(`/e/${slug}`);
+  const intro = g10.getByRole("dialog", { name: "Welcome" });
+  await expect(intro.getByRole("heading", { name: "Snap the day" })).toBeVisible();
+  await intro.getByRole("button", { name: "Next" }).click();
+  await intro.getByRole("button", { name: "Next" }).click();
+  await intro.getByRole("button", { name: "Join the album 🎉" }).click();
+  const selfieInput = g10.getByRole("dialog", { name: "Join the album" }).locator('input[capture="user"]');
+  await selfieInput.setInputFiles({ name: "me.jpg", mimeType: "image/jpeg", buffer: await jpeg("#8a5cf6") });
+  await expect(g10.getByRole("button", { name: "Add a selfie (optional)" }).locator("img")).toBeVisible();
+  await g10.getByLabel("Your name").fill("Zara");
+  await g10.getByRole("button", { name: /Let's go/ }).click();
+  await expect(g10.getByRole("button", { name: "You: Zara" }).locator("img")).toBeVisible({ timeout: 60_000 }); // dev compiles the avatar route on first use
+  const [zara] = await sql("select avatar_key from guests where event_id = $1 and name = 'Zara'", [ev.id]);
+  expect(zara.avatar_key).toMatch(/\/avatars\//);
+  await g10.reload();
+  await expect(intro).toHaveCount(0); // only once
+
+  // ---------------------------------------------------------------- host: guest view banner, settings, missions emoji
+  await page.goto(`/e/${slug}`);
+  await page.getByRole("link", { name: "Host dashboard" }).click();
+  await expect(page).toHaveURL(new RegExp(`/dashboard/events/${ev.id}$`));
+  await expect(page.getByRole("region", { name: "Getting started" })).toBeVisible();
+  await page.goto(`/dashboard/events/${ev.id}/settings`);
+  const tagBox = page.getByLabel("Add a hashtag");
+  await page.getByRole("button", { name: /Remove #ceremony/ }).click();
+  await tagBox.fill("bestnight");
+  await tagBox.press("Enter");
+  await page.getByLabel("Closed").check();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  const [st] = await sql("select suggested_tags, uploads_enabled from events where id = $1", [ev.id]);
+  expect(st.suggested_tags).toContain("bestnight");
+  expect(st.suggested_tags).not.toContain("ceremony");
+  expect(st.uploads_enabled).toBe(false);
+  await sql("update events set uploads_enabled = true where id = $1", [ev.id]);
+  await page.goto(`/dashboard/events/${ev.id}/missions`);
+  await page.getByRole("button", { name: /Mission emoji/ }).click();
+  await page.getByRole("option", { name: "🎂" }).click();
+  await page.getByPlaceholder("Selfie with the bride's mum").fill("Cake moment");
+  await page.getByRole("button", { name: "Add mission" }).click();
+  await expect(page.getByText("Mission added.")).toBeVisible();
+  const [cake] = await sql("select emoji from event_missions where event_id = $1 and title = 'Cake moment'", [ev.id]);
+  expect(cake.emoji).toBe("🎂");
+
+  for (const c of [c1, c2, c3, c4, c5, c6, c7, c8, c10]) await c.close();
 });

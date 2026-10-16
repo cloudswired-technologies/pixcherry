@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { getManagedEvent } from "@/lib/events";
 import { formatDateTime } from "@/lib/format";
 import { listGuests } from "@/lib/guest-admin";
+import { publicUrl } from "@/lib/storage";
 import { blockGuest, mergeGuestsNow, notSamePhone, removeGuestNow } from "../../actions";
 
 export const metadata = { title: "Guests" };
@@ -96,7 +97,11 @@ export default async function Guests({ params, searchParams }: { params: Promise
           {list.map((g) => (
             <li key={g.id} className={cn("grid gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft sm:flex sm:items-center", g.is_blocked && "opacity-70")}>
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand font-bold text-white">{(g.name ?? "G").charAt(0).toUpperCase()}</span>
+                {g.avatar_key ? (
+                  <img src={publicUrl(g.avatar_key)} alt="" className="size-10 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand font-bold text-white">{(g.name ?? "G").charAt(0).toUpperCase()}</span>
+                )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-bold">{g.name ?? "Guest"}</span>

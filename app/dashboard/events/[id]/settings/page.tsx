@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { Confirm } from "@/components/confirm";
 import { SlugField } from "@/components/slug-field";
+import { TagEditor } from "@/components/tag-editor";
 import { GUEST_PREFIX } from "@/lib/env";
 import {
   Card,
@@ -132,18 +133,8 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               />
             </Field>
             {f.tags ? (
-              <Field
-                label="Hashtags guests can tap"
-                htmlFor="suggested_tags"
-                help="Separate with spaces. Each hashtag becomes an album in Highlights. Guests can also type their own."
-              >
-                <Input
-                  id="suggested_tags"
-                  name="suggested_tags"
-                  defaultValue={suggestedTags(e)
-                    .map((t) => `#${t}`)
-                    .join(" ")}
-                />
+              <Field label="Hashtags guests can tap">
+                <TagEditor name="suggested_tags" defaultValue={suggestedTags(e)} />
               </Field>
             ) : null}
             <Field
@@ -166,12 +157,24 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               help="Shown next to their photos. Guests can still skip it."
               defaultChecked={e.ask_guest_name}
             />
-            <Toggle
-              name="uploads_enabled"
-              label="Accept uploads"
-              help="Turn off to stop new photos. The gallery stays open."
-              defaultChecked={e.uploads_enabled}
-            />
+            <fieldset className="grid gap-2">
+              <legend className="mb-1.5 text-sm font-semibold">How guests add photos</legend>
+              {[
+                { v: "both", label: "Snap and upload", help: "Guests take photos with Snap or pick them from their phone gallery.", on: e.uploads_enabled && !e.camera_only },
+                ...(f.camera
+                  ? [{ v: "camera", label: "Snap only", help: "Only photos taken with Snap during the event — no old photos from the gallery.", on: e.uploads_enabled && e.camera_only }]
+                  : []),
+                { v: "closed", label: "Closed", help: "No new photos. Guests can still look, heart and download.", on: !e.uploads_enabled },
+              ].map((o) => (
+                <label key={o.v} className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft/40">
+                  <input type="radio" name="photo_mode" value={o.v} defaultChecked={o.on} className="mt-0.5 size-5 shrink-0 accent-brand" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-semibold">{o.label}</span>
+                    <span className="text-xs text-muted-foreground">{o.help}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
             <Toggle
               name="require_approval"
               label="Approve photos before guests see them"
@@ -188,17 +191,6 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               label="One phone, one roll"
               help="A phone that already joined (even from another browser) continues as the same guest, with the same shots left. Turn off if many guests share one phone model on the same Wi-Fi and get mixed up — repeats are then only flagged in Guests."
               defaultChecked={e.one_phone_one_roll}
-            />
-            <Toggle
-              name="camera_only"
-              label="New photos only (camera)"
-              help={
-                f.camera
-                  ? "Guests can only share photos they take with Snap during the event — no uploads from their phone gallery."
-                  : "Available on a higher package."
-              }
-              defaultChecked={e.camera_only}
-              disabled={!f.camera}
             />
             {f.custom_branding ? (
               <Field

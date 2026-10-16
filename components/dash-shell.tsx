@@ -243,8 +243,8 @@ function SideContent({
             </div>
           ) : null}
           {current.guestUrl ? (
-            <a href={current.guestUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 border-t border-border bg-card py-2 text-xs font-semibold text-brand hover:bg-brand-soft/50">
-              Open guest page <ExternalLink className="size-3.5" aria-hidden />
+            <a href={current.guestUrl} target="_blank" rel="noreferrer" className="m-2 mt-0 flex items-center justify-center gap-1.5 rounded-xl bg-brand py-2 text-xs font-bold text-white shadow-cherry hover:bg-brand-strong">
+              📸 Open guest app <ExternalLink className="size-3.5" aria-hidden />
             </a>
           ) : null}
         </div>

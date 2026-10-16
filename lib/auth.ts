@@ -12,6 +12,21 @@ import { codeEmail } from "@/lib/email-templates";
 // Bumping users.session_version signs the user out everywhere.
 
 const COOKIE = "pc_session";
+
+/**
+ * In production the session is shared with the guest host (app.pixcherry.com),
+ * so a host browsing their own album sees "Back to dashboard".
+ */
+function cookieDomain() {
+  if (process.env.NODE_ENV !== "production") return undefined;
+  try {
+    const app = new URL(process.env.APP_URL ?? "").hostname;
+    const guest = process.env.GUEST_URL ? new URL(process.env.GUEST_URL).hostname : "";
+    return guest && guest.endsWith(`.${app}`) ? app : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const SESSION_DAYS = 30;
 const CODE_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
@@ -97,11 +112,15 @@ export async function verifyLoginCode(email: string, code: string): Promise<"ok"
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    domain: cookieDomain(),
     maxAge: SESSION_DAYS * 86400,
   });
   return "ok";
 }
 
 export async function signOut() {
-  (await cookies()).delete(COOKIE);
+  const jar = await cookies();
+  jar.delete(COOKIE);
+  const domain = cookieDomain();
+  if (domain) jar.set(COOKIE, "", { domain, path: "/", maxAge: 0 });
 }

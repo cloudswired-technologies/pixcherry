@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { PlanCard } from "@/components/plan-card";
+import { PackageBenefits } from "@/components/package-benefits";
+import { ADDON_KINDS } from "@/lib/plan-schema";
 import { Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { getManagedEvent } from "@/lib/events";
@@ -66,8 +68,43 @@ export default async function Checkout({ params, searchParams }: { params: Promi
   return (
     <div className="grid gap-8">
       {back}
-      <PageHeader title="Upgrade or add more" sub={`Current package: ${current.name}`} />
+      <PageHeader title="Your package" sub="Everything this event includes. Need more? Add it below — it adds to this list straight away." />
       {banner ? <Notice tone="warn">{banner}</Notice> : null}
+
+      <Card className="grid gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-brand">Current package</div>
+            <h2 className="text-2xl font-extrabold">{current.name}</h2>
+          </div>
+          <div className="text-sm text-muted-foreground">Paid {formatMoney(current.price_cents)} · photos online until {e.deletion_at ? formatDate(e.deletion_at) : "—"}</div>
+        </div>
+        <PackageBenefits cfg={e.cfg} addons={(e.addon_totals ?? {}) as Record<string, number>} />
+      </Card>
+
+      {addons.length ? (
+        <section className="grid gap-4">
+          <div>
+            <h2 className="text-lg font-bold">Add-ons</h2>
+            <p className="text-sm text-muted-foreground">Top up just what you need. Each one adds to your package above.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {addons.map((a) => (
+              <Card key={a.id} className="grid gap-3">
+                <div className="font-bold">{a.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {ADDON_KINDS.find((k) => k.kind === a.kind)?.label}: now {e.cfg.limits[a.kind as keyof typeof e.cfg.limits].toLocaleString("en-MY")} → {(e.cfg.limits[a.kind as keyof typeof e.cfg.limits] + a.amount).toLocaleString("en-MY")}
+                </div>
+                <div className="text-2xl font-bold">{formatMoney(a.price_cents)}</div>
+                <ActionForm action={action} submit="Buy" pending="Opening payment…" fullWidth>
+                  <input type="hidden" name="kind" value="addon" />
+                  <input type="hidden" name="addon_id" value={a.id} />
+                </ActionForm>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {upgrades.length ? (
         <section className="grid gap-4">
@@ -89,24 +126,6 @@ export default async function Checkout({ params, searchParams }: { params: Promi
                   </ActionForm>
                 }
               />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {addons.length ? (
-        <section className="grid gap-4">
-          <h2 className="text-lg font-bold">Add-ons</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {addons.map((a) => (
-              <Card key={a.id} className="grid gap-3">
-                <div className="font-bold">{a.name}</div>
-                <div className="text-2xl font-bold">{formatMoney(a.price_cents)}</div>
-                <ActionForm action={action} submit="Buy" pending="Opening payment…" fullWidth>
-                  <input type="hidden" name="kind" value="addon" />
-                  <input type="hidden" name="addon_id" value={a.id} />
-                </ActionForm>
-              </Card>
             ))}
           </div>
         </section>

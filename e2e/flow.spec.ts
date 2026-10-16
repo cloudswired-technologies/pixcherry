@@ -79,8 +79,8 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await basic.getByRole("button", { name: /^Pay RM/ }).click();
   await expect(page.getByRole("heading", { name: "You're all set" })).toBeVisible();
   await page.getByRole("link", { name: "Get your QR code" }).click();
-  await expect(page.getByAltText("QR code for the guest page")).toBeVisible();
-  const guestUrl = (await page.locator("div.font-mono").first().innerText()).trim();
+  await expect(page.getByAltText("QR card guests scan to join the album")).toBeVisible();
+  const guestUrl = "http://" + (await page.locator("span.font-mono").first().innerText()).trim();
   // Link made from the event name (aina-hakim-…), unless the organiser typed one.
   expect(guestUrl).toMatch(/\/e\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/);
   const slug = guestUrl.split("/e/")[1];
@@ -90,6 +90,11 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
 
   const qr = await page.request.get(`/api/events/${ev.id}/qr`);
   expect(qr.status()).toBe(200);
+  // The designed card: PNG and A5 PDF.
+  const card = await page.request.get(`/api/events/${ev.id}/card`);
+  expect(card.headers()["content-type"]).toBe("image/png");
+  const pdf = await page.request.get(`/api/events/${ev.id}/card?format=pdf`);
+  expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
   expect(qr.headers()["content-type"]).toBe("image/png");
 
   // --- guest joins on a phone and uploads 3 photos + 1 broken file

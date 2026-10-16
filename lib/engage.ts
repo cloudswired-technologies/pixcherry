@@ -117,15 +117,15 @@ export type Person = { id: string; name: string | null; count: number; cover: st
 
 /** Uploaders with at least one visible photo, most photos first ("folders"). */
 export async function listPeople(eventId: string, limit = 200): Promise<Person[]> {
-  const rows = await q<{ id: string; name: string | null; count: number; hearts: number; cover_id: string | null }>(
-    `select g.id, g.name, count(p.id)::int as count, coalesce(sum(p.vote_count), 0)::int as hearts,
+  const rows = await q<{ id: string; name: string | null; count: number; hearts: number; cover_id: string | null; avatar_key: string | null }>(
+    `select g.id, g.name, g.avatar_key, count(p.id)::int as count, coalesce(sum(p.vote_count), 0)::int as hearts,
        (select p2.id from photos p2 where p2.guest_id = g.id and p2.status = 'ready' order by p2.vote_count desc, p2.ready_at desc limit 1) as cover_id
      from guests g join photos p on p.guest_id = g.id and p.status = 'ready'
      where g.event_id = $1
      group by g.id order by count(p.id) desc, g.created_at limit ${Math.min(limit, 500)}`,
     [eventId],
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, count: r.count, hearts: r.hearts, cover: r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).sm) : null }));
+  return rows.map((r) => ({ id: r.id, name: r.name, count: r.count, hearts: r.hearts, cover: r.avatar_key ? publicUrl(r.avatar_key) : r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).sm) : null }));
 }
 
 export type TagAlbum = { tag: string; count: number; cover: string | null };

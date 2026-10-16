@@ -16,11 +16,12 @@ export type GuestRow = {
   wishes: number;
   same_phone_as: string | null;
   same_phone_name: string | null;
+  avatar_key: string | null;
 };
 
 export async function listGuests(eventId: string) {
   return q<GuestRow>(
-    `select g.id, g.name, g.created_at, g.last_seen_at, g.is_blocked, g.same_phone_as, o.name as same_phone_name,
+    `select g.id, g.name, g.avatar_key, g.created_at, g.last_seen_at, g.is_blocked, g.same_phone_as, o.name as same_phone_name,
        (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos,
        (select coalesce(sum(p.vote_count), 0)::int from photos p where p.guest_id = g.id and p.status = 'ready') as hearts,
        (select count(*)::int from wishes w where w.guest_id = g.id) as wishes

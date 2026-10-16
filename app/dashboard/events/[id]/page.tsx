@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, Camera, Download, ExternalLink, Heart, Images, MessageCircle, MessageCircleHeart, Pencil, QrCode, Sparkles, Tv, Users } from "lucide-react";
+import { ArrowRight, Camera, Download, Heart, Images, MessageCircle, MessageCircleHeart, Pencil, QrCode, Sparkles, Tv, Users } from "lucide-react";
 import { Confirm } from "@/components/confirm";
-import { CopyButton } from "@/components/copy-button";
+import QRCode from "qrcode";
+import { QrCardPanel } from "@/components/qr-card-panel";
+import { PackageBenefits } from "@/components/package-benefits";
+import { EventGuide } from "./event-guide";
 import { Meter, PhaseBadge } from "@/components/event-bits";
 import { Card, LinkButton, Notice, btn } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -110,6 +113,15 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   const soon = deletionSoon(e, Number(warnDays) || 3);
   const cover = coverUrl(e);
   const perMission = new Map(board?.missions.map((m) => [m.id, m.total]) ?? []);
+  const qrSvg = await QRCode.toString(url, { type: "svg", margin: 1, color: { dark: "#1f2937", light: "#ffffff" } });
+  const steps = [
+    { key: "details", title: "Add a cover photo and venue", text: "Makes the album feel like yours.", href: `${base}/settings`, done: !!e.cover_key || !!e.venue },
+    ...(f.missions
+      ? [{ key: "missions", title: "Add snap missions", text: "Fun photo challenges — one tap adds a ready-made pack.", href: `${base}/missions`, done: missions.length > 0 }]
+      : []),
+    { key: "try", title: "Try the guest app yourself", text: "Scan the QR with your phone and snap the first photo.", href: url, done: e.photo_count > 0, external: true },
+    { key: "share", title: "Download the QR card and share it", text: "Print it for the tables or send it on WhatsApp.", href: `${base}/qr`, done: stats.joined > 1 },
+  ];
 
   return (
     <div className="grid gap-6">
@@ -134,7 +146,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
           {!e.purged_at ? (
             <div className="flex flex-wrap gap-2">
               <a href={url} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
-                <ExternalLink aria-hidden /> Guest page
+                <Camera aria-hidden /> Open guest app
               </a>
               {f.slideshow ? (
                 <a href={`${url}/slideshow`} target="_blank" rel="noreferrer" className={btn("outline", "sm", "border-white/20 bg-white/10 text-white hover:bg-white/20")}>
@@ -163,6 +175,8 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
           .
         </Notice>
       ) : null}
+
+      {!e.purged_at ? <EventGuide eventId={e.id} guestUrl={url} qrSvg={qrSvg} steps={steps} /> : null}
 
       {/* Live numbers — the same ones guests see */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -275,7 +289,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
         </Card>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         {/* Latest photos */}
         <Card>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -302,26 +316,19 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
           )}
         </Card>
 
-        {/* QR */}
+        {/* QR card — the same design guests see on the tables */}
         <Card className="grid content-start gap-3">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold">
-              <QrCode className="size-5" aria-hidden /> Guest QR code
+              <QrCode className="size-5" aria-hidden /> Guest QR card
             </h2>
             <Link href={`${base}/qr`} className="text-sm font-semibold text-brand">
-              Print card
+              QR & sharing
             </Link>
           </div>
           {!e.purged_at ? (
             <>
-              <img src={`/api/events/${e.id}/qr?format=inline&v=${e.slug}`} alt="QR code for the guest page" className="mx-auto w-full max-w-44 rounded-xl border border-border bg-white" />
-              <div className="break-all rounded-xl bg-muted px-3 py-2 text-center font-mono text-sm">{url}</div>
-              <div className="flex flex-wrap justify-center gap-2">
-                <CopyButton text={url} />
-                <a href={`/api/events/${e.id}/qr`} className={btn("outline")}>
-                  <Download aria-hidden /> PNG
-                </a>
-              </div>
+              <QrCardPanel eventId={e.id} slug={e.slug} url={url} compact />
               <p className="text-center text-xs text-muted-foreground">Guests can upload until {formatDateTime(uploadsCloseAt(e.ends_at, e.cfg))}.</p>
             </>
           ) : null}
@@ -379,8 +386,9 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
             ) : null}
           </div>
           <p className="text-sm text-muted-foreground">
-            {formatBytes(Number(e.bytes_used))} stored · {lim.photos_per_guest} photos per guest · deleted on {e.deletion_at ? formatDate(e.deletion_at) : "—"} ({lim.retention_days} days after the event)
+            {formatBytes(Number(e.bytes_used))} stored · photos deleted on {e.deletion_at ? formatDate(e.deletion_at) : "—"}
           </p>
+          <PackageBenefits cfg={e.cfg} addons={(e.addon_totals ?? {}) as Record<string, number>} compact />
         </Card>
         <Card className="grid content-start gap-2">
           <h2 className="text-lg font-bold">Payments</h2>

@@ -75,6 +75,8 @@ export function normaliseFeatures(raw: unknown): Features {
 
 export type QualityPreset = { name: string; max_px: number | null; jpeg_quality: number };
 
-export function qualityLabel(q: QualityPreset) {
-  return q.max_px ? `Photos up to ${q.max_px.toLocaleString("en-MY")} px` : "Original-quality photos";
+/** Every package gets the same quality now (sharp, fast to upload); kept for old snapshots. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function qualityLabel(_q?: QualityPreset) {
+  return "Sharp, full-quality photos (up to 3072 px)";
 }

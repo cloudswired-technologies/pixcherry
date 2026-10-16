@@ -8,7 +8,7 @@ import { clientIp } from "@/lib/rate-limit";
 // Guests have no account: one signed cookie per event identifies the phone.
 // Upload quota is counted on the guests row.
 
-export type Guest = { id: string; event_id: string; name: string | null; upload_count: number; is_blocked: boolean };
+export type Guest = { id: string; event_id: string; name: string | null; upload_count: number; is_blocked: boolean; avatar_key?: string | null };
 
 const cookieName = (eventId: string) => `pcg_${eventId.slice(0, 8)}`;
 type GuestCookie = { g: string; e: string; t: string };
@@ -17,7 +17,7 @@ async function guestFromKey(eventId: string, key: string | undefined) {
   const c = unsign<GuestCookie>(key);
   if (!c || c.e !== eventId) return null;
   return one<Guest>(
-    "select id, event_id, name, upload_count, is_blocked from guests where id = $1 and event_id = $2 and (token_hash = $3 or $3 = any(extra_token_hashes))",
+    "select id, event_id, name, upload_count, is_blocked, avatar_key from guests where id = $1 and event_id = $2 and (token_hash = $3 or $3 = any(extra_token_hashes))",
     [c.g, eventId, sha256(c.t)],
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowDown, ArrowUp, Sparkles, Trash2 } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { Confirm } from "@/components/confirm";
+import { EmojiPicker } from "@/components/emoji-picker";
 import { Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { listMissions, missionBoard } from "@/lib/engage";
@@ -108,7 +109,7 @@ export default async function Missions({ params }: { params: Promise<{ id: strin
           <ActionForm action={addMission.bind(null, e.id)} submit="Add mission" pending="Adding…">
             <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
               <Field label="Emoji">
-                <Input name="emoji" maxLength={8} placeholder="📸" className="text-center text-xl" />
+                <EmojiPicker name="emoji" />
               </Field>
               <Field label="Mission">
                 <Input name="title" required maxLength={80} placeholder="Selfie with the bride's mum" />

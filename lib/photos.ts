@@ -100,6 +100,8 @@ export type GalleryPhoto = {
   mission: string | null;
   tags: string[];
   caption: string | null;
+  /** Uploader's selfie, if they added one. */
+  avatar: string | null;
 };
 
 type Row = {
@@ -115,6 +117,7 @@ type Row = {
   mission_id: string | null;
   tags: string[];
   caption: string | null;
+  avatar_key: string | null;
 };
 
 function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto {
@@ -136,6 +139,7 @@ function toGallery(eventId: string, r: Row, viewer: string | null): GalleryPhoto
     mission: r.mission_id,
     tags: r.tags ?? [],
     caption: r.caption ?? null,
+    avatar: r.avatar_key ? publicUrl(r.avatar_key) : null,
   };
 }
 
@@ -182,7 +186,7 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   }
   if (opts.since && !Number.isNaN(Date.parse(opts.since))) where += ` and p.ready_at > $${params.push(opts.since)}::timestamptz`;
   const rows = await q<Row>(
-    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags, p.caption,
+    `select p.id, p.width, p.height, g.name, p.ready_at, p.status, p.guest_id, p.vote_count, p.mission_id, p.tags, p.caption, g.avatar_key,
        exists (select 1 from photo_votes v where v.photo_id = p.id and v.guest_id = ${viewerParam}) as voted
      from photos p left join guests g on g.id = p.guest_id
      where ${where} order by ${order} limit ${limit + 1} offset ${offset}`,

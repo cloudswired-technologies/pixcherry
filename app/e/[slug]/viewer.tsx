@@ -177,7 +177,11 @@ export function Viewer({
 
       <div className="grid gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-full bg-brand font-bold">{initial(ph.by)}</span>
+          {ph.avatar ? (
+            <img src={ph.avatar} alt="" className="size-10 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="grid size-10 place-items-center rounded-full bg-brand font-bold">{initial(ph.by)}</span>
+          )}
           <div className="min-w-0 flex-1">
             {ph.guest ? (
               <button type="button" className="block max-w-full truncate font-semibold hover:underline" onClick={() => onFolder(ph.guest!, ph.by)}>

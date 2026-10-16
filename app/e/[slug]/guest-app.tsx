@@ -34,6 +34,8 @@ import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
 import { PixCamera } from "./camera";
+import { SelfieButton, uploadSelfie } from "./selfie";
+import { Welcome } from "./welcome";
 import { Develop, PHOTO_JPEG, PHOTO_MAX_PX } from "./develop";
 import { BestMoments, Stories, type Moment } from "./highlights";
 import { InstallGuide, useInstall } from "./install";
@@ -60,7 +62,7 @@ import { Viewer } from "./viewer";
 
 type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; slideshow: boolean };
 type TagAlbum = { tag: string; count: number; cover: string | null };
-type Joined = { id: string; name: string | null; uploaded: number; blocked: boolean };
+type Joined = { id: string; name: string | null; uploaded: number; blocked: boolean; avatar?: string | null };
 
 type Props = {
   slug: string;
@@ -71,6 +73,8 @@ type Props = {
   qrSvg: string;
   /** Signed guest session for the home-screen app's start link. */
   resumeKey: string | null;
+  /** Set when the host is looking at their own album: link back to their dashboard. */
+  hostUrl: string | null;
   event: {
     name: string;
     description: string;
@@ -326,8 +330,9 @@ export function GuestApp(p: Props) {
   );
 
   const onJoined = useCallback(
-    (g: { id: string; name: string | null; uploaded: number; key: string | null }) => {
-      setJoined({ id: g.id, name: g.name, uploaded: g.uploaded, blocked: false });
+    (g: { id: string; name: string | null; uploaded: number; key: string | null; avatar?: string | null }) => {
+      setJoined({ id: g.id, name: g.name, uploaded: g.uploaded, blocked: false, avatar: g.avatar ?? null });
+      if (g.avatar) setPeopleKey((k) => k + 1);
       if (g.key) setKey(g.key);
       const next = joinFor;
       setJoinFor(null);
@@ -463,13 +468,29 @@ export function GuestApp(p: Props) {
 
   return (
     <div style={style} className="min-h-dvh bg-paper pb-36">
+      {p.hostUrl ? (
+        <div className="bg-ink px-4 py-2 text-white">
+          <div className="mx-auto flex max-w-3xl items-center gap-3 text-sm">
+            <span className="min-w-0 flex-1">
+              <strong>Guest view.</strong> <span className="text-white/75">This is what your guests see — snap and upload here too.</span>
+            </span>
+            <a href={p.hostUrl} className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-ink">
+              Host dashboard
+            </a>
+          </div>
+        </div>
+      ) : null}
       {/* ------------------------------------------------------------ top bar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           {p.event.logo ? <img src={p.event.logo} alt="" className="h-8 w-auto" /> : <Logo className="text-lg" />}
           {joined ? (
             <button type="button" onClick={() => setSheet("you")} className="flex min-w-0 items-center gap-2 rounded-full bg-muted py-1 pl-1 pr-3 text-sm font-semibold" aria-label={`You: ${joined.name ?? "Guest"}`}>
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">{initial(joined.name)}</span>
+              {joined.avatar ? (
+                <img src={joined.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
+              ) : (
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">{initial(joined.name)}</span>
+              )}
               <span className="min-w-0 max-w-32 truncate">{joined.name ?? "You"}</span>
               {master ? <span title="Mission Master">🏆</span> : null}
             </button>
@@ -797,6 +818,11 @@ export function GuestApp(p: Props) {
           <YouPanel
             slug={p.slug}
             joined={joined}
+            onAvatar={(avatar) => {
+              setJoined({ ...joined, avatar });
+              setPeopleKey((k) => k + 1);
+              flash("Selfie updated 📸");
+            }}
             onRenamed={(name) => {
               setJoined({ ...joined, name });
               setPeopleKey((k) => k + 1);
@@ -966,7 +992,8 @@ export function GuestApp(p: Props) {
         />
       ) : null}
 
-      {/* After the viewer so joining to comment shows on top of it. */}
+      {p.canUpload ? <Welcome slug={p.slug} eventName={p.event.name} missions={hasMissions} joined={!!joined} onJoin={() => setJoinFor({ kind: "join" })} /> : null}
+      {/* After the viewer so joining shows on top of it. */}
       <Sheet open={!!joinFor} onClose={() => setJoinFor(null)} title="Join the album" top>
         <JoinForm slug={p.slug} askName={p.event.askName} siteKey={p.siteKey} onJoined={onJoined} canUpload={p.canUpload} />
       </Sheet>
@@ -984,9 +1011,10 @@ function JoinForm({
   slug: string;
   askName: boolean;
   siteKey: string | null;
-  onJoined: (j: NonNullable<JoinState["joined"]>) => void;
+  onJoined: (j: NonNullable<JoinState["joined"]> & { avatar?: string | null }) => void;
   canUpload: boolean;
 }) {
+  const [selfie, setSelfie] = useState<{ blob: Blob; url: string } | null>(null);
   // Controlled fields + a manual submit: a failed attempt (e.g. the bot check not
   // finished yet) must never wipe the name the guest already typed.
   const [name, setName] = useState("");
@@ -1018,7 +1046,11 @@ function JoinForm({
     setError(null);
     startBusy(async () => {
       const r = await join(slug, {}, fd);
-      if (r.joined) return onJoined(r.joined);
+      if (r.joined) {
+        // The selfie goes up once they're in (it needs the guest session).
+        const avatar = selfie ? await uploadSelfie(slug, selfie.blob) : null;
+        return onJoined({ ...r.joined, avatar });
+      }
       if (r.nameTaken) {
         setMatch(null);
         return setTaken(r.nameTaken);
@@ -1039,20 +1071,27 @@ function JoinForm({
     <form onSubmit={submit} className="grid gap-3">
       <p className="text-sm text-muted-foreground">One tap and you&apos;re in — no app, no password.</p>
       {askName ? (
-        <label className="grid gap-1.5">
-          <span className="text-sm font-semibold">Your name</span>
-          <input
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={60}
-            autoComplete="name"
-            autoFocus
-            placeholder="So everyone knows who snapped it"
-            className="h-12 rounded-2xl border border-input bg-background px-4 outline-none focus:border-brand"
-          />
-        </label>
+        <div className="flex items-end gap-3">
+          <div className="grid justify-items-center gap-1">
+            <SelfieButton preview={selfie?.url ?? null} onPick={(blob, url) => setSelfie({ blob, url })} label="Add a selfie (optional)" />
+            <span className="text-[10px] font-semibold text-muted-foreground">Selfie</span>
+          </div>
+          <label className="grid min-w-0 flex-1 gap-1.5">
+            <span className="text-sm font-semibold">Your name</span>
+            <input
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={60}
+              autoComplete="name"
+              autoFocus
+              placeholder="So everyone knows who snapped it"
+              className="h-12 rounded-2xl border border-input bg-background px-4 outline-none focus:border-brand"
+            />
+          </label>
+        </div>
       ) : null}
+      {askName ? <p className="-mt-1 text-xs text-muted-foreground">Add a selfie so the hosts know whose photos are whose (optional).</p> : null}
       {taken && taken.name.toLowerCase() === name.trim().toLowerCase() ? (
         <NameTaken
           message={`Someone here is already called ${taken.name}. Add your surname or a nickname so friends can tell you apart.`}
@@ -1104,6 +1143,7 @@ function JoinForm({
 function YouPanel({
   slug,
   joined,
+  onAvatar,
   onRenamed,
   shotsLeft,
   missions,
@@ -1113,6 +1153,7 @@ function YouPanel({
 }: {
   slug: string;
   joined: Joined;
+  onAvatar: (url: string) => void;
   onRenamed: (name: string | null) => void;
   shotsLeft: number | null;
   missions: { done: number; total: number } | null;
@@ -1135,7 +1176,15 @@ function YouPanel({
   return (
     <div className="grid gap-4">
       <div className="flex items-center gap-4">
-        <span className="grid size-16 shrink-0 place-items-center rounded-full bg-brand text-2xl font-bold text-white shadow-soft">{initial(joined.name)}</span>
+        <SelfieButton
+          size="lg"
+          preview={joined.avatar ?? null}
+          label={joined.avatar ? "Change your selfie" : "Add a selfie"}
+          onPick={async (blob) => {
+            const url = await uploadSelfie(slug, blob);
+            if (url) onAvatar(url);
+          }}
+        />
         {editing ? (
           <div className="flex min-w-0 flex-1 gap-2">
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} autoFocus aria-label="Your name" className="h-11 min-w-0 flex-1 rounded-2xl border border-input bg-background px-3 outline-none focus:border-brand" />
