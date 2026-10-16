@@ -5,7 +5,7 @@ import { Check, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Zap, ZapOff } f
 import { LOOKS, createRenderer, drawOverlays, polaroid, stampText, type Look, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, playShutter, unlockAudio } from "@/lib/client/camera-sounds";
 import { stillPhoto } from "@/lib/client/still";
-import { PHOTO_JPEG, PHOTO_MAX_PX } from "./develop";
+import { PHOTO_JPEG, PHOTO_MAX_PX } from "@/lib/client/photo-quality";
 import { CaptionOverlay, ShotExtras } from "./shot-extras";
 
 // PixCherry camera: a live viewfinder with the film look, shutter sound and

@@ -95,16 +95,6 @@ export function Badge({ tone = "neutral", children }: { tone?: keyof typeof BADG
   return <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", BADGE[tone])}>{children}</span>;
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
-  return (
-    <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-bold tracking-tight">{value}</div>
-      {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}
-    </div>
-  );
-}
-
 export function Notice({ tone = "neutral", children }: { tone?: "neutral" | "ok" | "warn" | "danger"; children: ReactNode }) {
   const t = { neutral: "bg-muted text-foreground", ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", danger: "bg-danger-soft text-danger" }[tone];
   return <div className={cn("rounded-xl px-4 py-3 text-sm", t)}>{children}</div>;

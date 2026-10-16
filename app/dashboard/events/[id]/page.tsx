@@ -12,7 +12,7 @@ import { requireUser } from "@/lib/auth";
 import { one, q } from "@/lib/db";
 import { eventStats, listMissions, listWishes, missionBoard } from "@/lib/engage";
 import { coverUrl, getManagedEvent, guestUrl } from "@/lib/events";
-import { formatBytes, formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { formatBytes, formatDate, formatDateTime, formatMoney, formatRange } from "@/lib/format";
 import { deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
 import { photoKeys, publicUrl } from "@/lib/storage";
@@ -57,7 +57,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   const e = await getManagedEvent(id, user);
   if (!e) notFound();
   const phase = eventPhase(e);
-  const range = `${formatDateTime(e.starts_at)} – ${formatDateTime(e.ends_at)}`;
+  const range = formatRange(e.starts_at, e.ends_at);
   const base = `/dashboard/events/${e.id}`;
 
   if (!e.paid_at) {

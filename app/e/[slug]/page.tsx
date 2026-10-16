@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { Logo } from "@/components/ui";
 import { eventStats, listMissions, listTagAlbums, missionsDoneBy } from "@/lib/engage";
@@ -41,15 +41,14 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
     const moved = await renamedSlug(slug);
     if (moved) redirect(guestUrl(moved));
   }
-  if (!e || !e.paid_at || e.purged_at) {
+  if (!e || !e.paid_at) notFound();
+  if (e.purged_at) {
     return (
       <main className="grid min-h-dvh place-items-center px-6 text-center">
         <div className="grid justify-items-center gap-3">
           <Logo className="text-lg" />
-          <h1 className="text-xl font-bold">{e?.purged_at ? "This album has closed" : "Event not found"}</h1>
-          <p className="max-w-xs text-sm text-muted-foreground">
-            {e?.purged_at ? "The storage period for this event has ended and its photos were deleted." : "Check the QR code or link with the organiser."}
-          </p>
+          <h1 className="text-xl font-bold">This album has closed</h1>
+          <p className="max-w-xs text-sm text-muted-foreground">The storage period for this event has ended and its photos were deleted.</p>
         </div>
       </main>
     );

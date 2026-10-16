@@ -5,6 +5,7 @@ import { Check, ChevronLeft, Loader2, RotateCcw } from "lucide-react";
 import { LOOKS, createRenderer, drawOverlays, polaroid, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, unlockAudio } from "@/lib/client/camera-sounds";
 import { CaptionOverlay, ShotExtras } from "./shot-extras";
+import { PHOTO_JPEG, PHOTO_MAX_PX } from "@/lib/client/photo-quality";
 
 // "Develop" a photo from the phone's own camera: the native camera gives the
 // best quality (full sensor, HDR, zoom), then the guest picks a film look,
@@ -13,9 +14,6 @@ import { CaptionOverlay, ShotExtras } from "./shot-extras";
 
 type Mission = { id: string; title: string; emoji: string | null };
 
-/** Longest side of uploaded photos and their JPEG quality: sharp on any screen, quick on venue Wi-Fi. */
-export const PHOTO_MAX_PX = 3072;
-export const PHOTO_JPEG = 0.88;
 
 async function loadPhoto(file: File) {
   const full = await createImageBitmap(file, { imageOrientation: "from-image" });

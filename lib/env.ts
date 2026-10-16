@@ -8,7 +8,6 @@ export const GUEST_URL = (process.env.GUEST_URL ?? `${APP_URL}/e`).replace(/\/$/
 export const GUEST_PREFIX = `${GUEST_URL.replace(/^https?:\/\//, "")}/`;
 export const GUEST_HOST =process.env.GUEST_URL ? new URL(process.env.GUEST_URL).host : null;
 export const IMG_URL = (process.env.IMG_URL ?? `${APP_URL}/api/dev-storage`).replace(/\/$/, "");
-export const APP_NAME = "PixCherry";
 export const TZ = "Asia/Kuala_Lumpur";
 
 export function secret(name: "SESSION_SECRET" | "CRON_SECRET") {

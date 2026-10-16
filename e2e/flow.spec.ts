@@ -69,14 +69,14 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await sql("insert into promo_codes (code, percent_off) values ('E2EFREE', 100) on conflict (code) do update set is_active = true, used_count = 0");
 
   // --- organiser creates and activates an event
-  await login(page, email, "/dashboard/events/new?plan=basic");
+  await login(page, email, "/dashboard/events/new?plan=premium");
   await expect(page.getByRole("heading", { name: "Create your event" })).toBeVisible();
   await page.getByLabel("Event name").fill("Aina & Hakim E2E");
   await page.getByRole("button", { name: "Continue to package" }).click();
   await expect(page.getByRole("heading", { name: "Choose a package" })).toBeVisible();
-  const basic = page.locator("div.rounded-3xl", { hasText: "Basic" }).first();
-  await basic.getByLabel("Promo code (optional)").fill("e2efree");
-  await basic.getByRole("button", { name: /^Pay RM/ }).click();
+  const premium = page.locator("div.rounded-3xl", { hasText: "Premium" }).first();
+  await premium.getByLabel("Promo code (optional)").fill("e2efree");
+  await premium.getByRole("button", { name: /^Pay RM/ }).click();
   await expect(page.getByRole("heading", { name: "You're all set" })).toBeVisible();
   await page.getByRole("link", { name: "Get your QR code" }).click();
   await expect(page.getByAltText("QR card guests scan to join the album")).toBeVisible();
@@ -85,7 +85,7 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   expect(guestUrl).toMatch(/\/e\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/);
   const slug = guestUrl.split("/e/")[1];
   const [ev] = await sql("select id, deletion_at, plan_snapshot->>'code' as plan from events where slug = $1", [slug]);
-  expect(ev.plan).toBe("basic");
+  expect(ev.plan).toBe("premium");
   expect(ev.deletion_at).toBeTruthy();
 
   const qr = await page.request.get(`/api/events/${ev.id}/qr`);
@@ -128,7 +128,9 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   expect(exif.exif).toBeUndefined();
   await guest.getByRole("button", { name: "Close" }).click();
 
-  // Basic: guests cannot download the album; the organiser can
+  // Premium lets guests download the album; switched off for this event they get 403. The organiser always can.
+  expect((await guest.request.get(`/api/e/${slug}/album`)).status()).toBe(200);
+  await sql(`update events set overrides = jsonb_set(coalesce(overrides, '{}'::jsonb), '{features}', coalesce(overrides->'features', '{}'::jsonb) || '{"guest_album_download": false}'::jsonb) where id = $1`, [ev.id]);
   expect((await guest.request.get(`/api/e/${slug}/album`)).status()).toBe(403);
   const zip = await page.request.get(`/api/e/${slug}/album`);
   expect(zip.status()).toBe(200);
@@ -162,7 +164,7 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   await expect(guest.getByRole("status")).toContainText("Shared!", { timeout: 60_000 });
 
   // admin pages render
-  for (const p of ["/admin", "/admin/events", "/admin/plans", "/admin/quality", "/admin/addons", "/admin/promos", "/admin/settings", "/admin/logs"]) {
+  for (const p of ["/admin", "/admin/events", "/admin/plans", "/admin/addons", "/admin/promos", "/admin/settings", "/admin/logs"]) {
     const r = await admin.goto(p);
     expect(r?.status(), p).toBe(200);
   }

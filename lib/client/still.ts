@@ -9,10 +9,6 @@ type ImageCaptureCtor = new (track: MediaStreamTrack) => ImageCaptureLike;
 
 const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
 
-export function canTakePhoto() {
-  return typeof window !== "undefined" && "ImageCapture" in window;
-}
-
 /** `crop` keeps the centre 1/crop of the photo (digital zoom where the camera has no optical zoom). */
 export async function stillPhoto(track: MediaStreamTrack | null, maxLong: number, crop = 1): Promise<ImageBitmap | null> {
   const Ctor = (window as unknown as { ImageCapture?: ImageCaptureCtor }).ImageCapture;

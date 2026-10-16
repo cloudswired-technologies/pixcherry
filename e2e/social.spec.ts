@@ -422,5 +422,5 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await page.getByLabel("Select all on this page").check();
   await expect(page.getByText(/^\d+ selected$/)).toBeVisible();
 
-  for (const c of [c1, c2, c3, c4, c5, c6, c7, c8, c10]) await c.close();
+  for (const c of [c1, c2, c3, c4, c5, c6, c7, c8, c10]) await c.close().catch(() => {}); // some close themselves earlier
 });

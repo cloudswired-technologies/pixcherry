@@ -101,6 +101,3 @@ export function verifyCallback(rawBody: Buffer, signatureB64: string | null, pub
   }
 }
 
-export function purchaseTotal(p: ChipPurchase) {
-  return p.purchase?.total ?? null;
-}

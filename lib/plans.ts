@@ -22,8 +22,6 @@ export type Plan = {
 
 export type Addon = { id: string; kind: AddonKind; name: string; amount: number; price_cents: number; is_active: boolean; sort: number };
 
-export type Preset = QualityPreset & { id: string; sort: number };
-
 const PLAN_SQL = `select p.*, json_build_object('name', qp.name, 'max_px', qp.max_px, 'jpeg_quality', qp.jpeg_quality) as quality
   from plans p join quality_presets qp on qp.id = p.quality_preset_id`;
 
@@ -47,8 +45,4 @@ export function snapshot(p: Plan): PlanSnapshot {
 
 export async function listAddons(activeOnly = true) {
   return q<Addon>(`select * from plan_addons ${activeOnly ? "where is_active" : ""} order by sort, price_cents`);
-}
-
-export async function listPresets() {
-  return q<Preset>("select id, name, max_px, jpeg_quality, sort from quality_presets order by sort, name");
 }

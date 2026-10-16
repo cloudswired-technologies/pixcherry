@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
@@ -141,14 +141,6 @@ async function countFiles(dir: string): Promise<number> {
     n += e.isDirectory() ? await countFiles(join(dir, e.name)) : 1;
   }
   return n;
-}
-
-export async function localSize(key: string) {
-  try {
-    return (await stat(localPath(key))).size;
-  } catch {
-    return null;
-  }
 }
 
 export function photoKeys(eventId: string, photoId: string) {

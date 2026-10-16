@@ -12,6 +12,13 @@ export function formatDateTime(d: Date | string) {
   return new Date(d).toLocaleString("en-MY", { timeZone: TZ, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/** "17 Oct 2026, 11:00 am – 5:00 pm" on one day, else both full dates. */
+export function formatRange(start: Date | string, end: Date | string) {
+  if (formatDate(start) !== formatDate(end)) return `${formatDateTime(start)} – ${formatDateTime(end)}`;
+  const time = new Date(end).toLocaleTimeString("en-MY", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+  return `${formatDateTime(start)} – ${time}`;
+}
+
 export function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   const units = ["KB", "MB", "GB", "TB"];

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type FormEvent } from "react";
 import confetti from "canvas-confetti";
 import {
@@ -33,10 +34,9 @@ import { deviceSignals } from "@/lib/client/device";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
-import { PixCamera } from "./camera";
 import { SelfieButton, uploadSelfie } from "./selfie";
 import { Welcome } from "./welcome";
-import { Develop, PHOTO_JPEG, PHOTO_MAX_PX } from "./develop";
+import { PHOTO_JPEG, PHOTO_MAX_PX } from "@/lib/client/photo-quality";
 import { BestMoments, Stories, type Moment } from "./highlights";
 import { InstallGuide, useInstall } from "./install";
 import {
@@ -59,6 +59,10 @@ import {
 } from "./panels";
 import { useGallery, type GalleryFilter } from "./use-gallery";
 import { Viewer } from "./viewer";
+
+// The camera and the develop screen (film looks, WebGL) load only when a guest snaps.
+const PixCamera = dynamic(() => import("./camera").then((m) => m.PixCamera), { ssr: false });
+const Develop = dynamic(() => import("./develop").then((m) => m.Develop), { ssr: false });
 
 type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; slideshow: boolean };
 type TagAlbum = { tag: string; count: number; cover: string | null };

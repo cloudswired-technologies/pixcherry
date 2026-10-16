@@ -9,7 +9,7 @@ import { DeleteEvent } from "@/app/dashboard/events/[id]/settings/delete-event";
 import { requireAdmin } from "@/lib/auth";
 import { one, q } from "@/lib/db";
 import { coverUrl, getEventById, guestUrl } from "@/lib/events";
-import { formatBytes, formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { formatBytes, formatDate, formatDateTime, formatMoney, formatRange } from "@/lib/format";
 import { eventPhase } from "@/lib/limits";
 import { FEATURES, LIMITS, normaliseLimits } from "@/lib/plan-schema";
 import { listPlans } from "@/lib/plans";
@@ -52,7 +52,7 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {owner?.name ? `${owner.name} · ` : ""}
-            {owner?.email} · {formatDateTime(e.starts_at)} – {formatDateTime(e.ends_at)}
+            {owner?.email} · {formatRange(e.starts_at, e.ends_at)}
           </p>
           <p className="text-sm text-muted-foreground">
             {e.plan_snapshot?.name ?? "No package yet"} · {paid ? `${formatMoney(paid)} paid` : "nothing paid"}
