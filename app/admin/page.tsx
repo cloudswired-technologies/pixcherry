@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Activity, ArrowRight, Camera, CircleDollarSign, HardDrive, PartyPopper, Radio, UserPlus, Users } from "lucide-react";
 import { Bars, Delta, Donut, Kpi } from "@/components/charts";
+import { AdminLoad } from "@/components/admin-load";
 import { Card, Notice } from "@/components/ui";
 import { adminOverview } from "@/lib/admin-stats";
+import { busyWindows, upcomingLoad } from "@/lib/capacity";
 import { requireAdmin } from "@/lib/auth";
 import { storageCostMyr } from "@/lib/costs";
 import { coverUrl } from "@/lib/events";
@@ -33,7 +35,8 @@ function Head({ title, href, link }: { title: string; href?: string; link?: stri
 
 export default async function AdminOverview() {
   const user = await requireAdmin();
-  const s = await adminOverview();
+  const [s, load] = await Promise.all([adminOverview(), upcomingLoad()]);
+  const overloaded = busyWindows(load).filter((w) => w.load === "over");
   const bytes = Number(s.events?.bytes ?? 0);
   const cronAge = s.cron ? hoursSince(s.cron.value.at) : null;
   const queue = (s.queue?.waiting ?? 0) + (s.queue?.processing ?? 0);
@@ -61,6 +64,12 @@ export default async function AdminOverview() {
       {cronAge === null || cronAge > 2 ? (
         <Notice tone="warn">
           The hourly cleanup job {cronAge === null ? "has never run" : `last ran ${Math.round(cronAge)} hours ago`}. Photos won&apos;t be deleted on time until it runs.
+        </Notice>
+      ) : null}
+
+      {overloaded.length ? (
+        <Notice tone="danger">
+          Big events overlap {overloaded.length === 1 ? `on ${formatDate(overloaded[0].from)}` : `at ${overloaded.length} times ahead`} (up to {Math.max(...overloaded.map((w) => w.peak)).toLocaleString("en-MY")} guests at once). Uploads may queue — see Server load ahead below.
         </Notice>
       ) : null}
 
@@ -117,6 +126,8 @@ export default async function AdminOverview() {
           <Bars data={s.upDays} />
         </Card>
       </div>
+
+      <AdminLoad events={load} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card className="rounded-3xl p-6">

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
+import { alertOverload } from "@/lib/capacity";
 import { safeEqual } from "@/lib/crypto";
 import { one, q } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { secret } from "@/lib/env";
 
 // Every 5 minutes (system cron): is the photo queue keeping up? If photos wait
-// too long, email the admins — at most once every 30 minutes.
+// too long, email the admins — at most once every 30 minutes. Also warns once per
+// event when big events are booked at the same time.
 
 const MAX_WAITING = 200;
 const MAX_WAIT_MIN = 3;
@@ -13,6 +15,7 @@ const MAX_WAIT_MIN = 3;
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   if (!safeEqual(auth, `Bearer ${secret("CRON_SECRET")}`)) return NextResponse.json({ error: "unauthorised" }, { status: 401 });
+  await alertOverload().catch((err) => console.error("overload alert", err));
   const s = await one<{ waiting: number; oldest_min: number | null }>(
     `select count(*)::int as waiting, round(extract(epoch from now() - min(uploaded_at)) / 60)::int as oldest_min
      from photos where status in ('uploaded','processing')`,
