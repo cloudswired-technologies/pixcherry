@@ -4,7 +4,7 @@ import { ArrowRight, Download } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { one, q } from "@/lib/db";
 import { eventStats, listMissions, listTagAlbums, listWishes } from "@/lib/engage";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { APP_URL } from "@/lib/env";
 import { getEventBySlug, guestPath, guestUrl, logoUrl, renamedSlug } from "@/lib/events";
 import { formatDate } from "@/lib/format";
@@ -28,12 +28,13 @@ export default async function Recap({ params }: { params: Promise<{ slug: string
     const moved = await renamedSlug(slug);
     if (moved) redirect(`${guestUrl(moved)}/recap`);
   }
-  if (!e || !e.paid_at || e.purged_at) {
+  if (!e || !e.paid_at) notFound();
+  if (e.purged_at) {
     return (
       <main className="grid min-h-dvh place-items-center px-6 text-center">
         <div className="grid justify-items-center gap-3">
           <Logo className="text-lg" />
-          <h1 className="text-xl font-bold">{e?.purged_at ? "This album has closed" : "Event not found"}</h1>
+          <h1 className="text-xl font-bold">This album has closed</h1>
         </div>
       </main>
     );

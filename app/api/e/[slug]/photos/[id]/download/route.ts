@@ -1,7 +1,8 @@
 import { photoWithCaption } from "@/lib/caption-image";
 import { one } from "@/lib/db";
 import { getEventBySlug } from "@/lib/events";
-import { rateLimit } from "@/lib/rate-limit";
+import { cookieGuestId } from "@/lib/guests";
+import { guestLimit } from "@/lib/rate-limit";
 import { getObjectStream, photoKeys } from "@/lib/storage";
 
 // Single-photo download with a proper filename (a cross-origin <a download> is
@@ -13,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!/^[0-9a-f-]{36}$/.test(id)) return new Response("Not found", { status: 404 });
   const e = await getEventBySlug(slug);
   if (!e || !e.paid_at || e.purged_at) return new Response("Not found", { status: 404 });
-  if (!(await rateLimit("photo-dl", 1000, 10 * 60_000))) return new Response("Please slow down.", { status: 429 });
+  if (!(await guestLimit("photo-dl", 300, 10 * 60_000, await cookieGuestId(e.id)))) return new Response("Please slow down.", { status: 429 });
   const p = await one<{ caption: string | null; name: string | null }>(
     "select p.caption, g.name from photos p left join guests g on g.id = p.guest_id where p.id = $1 and p.event_id = $2 and p.status = 'ready'",
     [id, e.id],

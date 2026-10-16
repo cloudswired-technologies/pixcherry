@@ -102,10 +102,12 @@ export function useUploader(opts: {
         setRemaining((r) => r + 1);
         throw new StopError("Upload failed. Check your connection and try again.");
       }
-      for (let attempt = 0; attempt < 3; attempt++) {
+      // The photo is in storage now. If confirming keeps failing (bad Wi-Fi), the server
+      // finds it there within the hour and adds it anyway, so it isn't lost.
+      for (let attempt = 0; attempt < 6; attempt++) {
         const done = await fetch(`/api/e/${o.slug}/uploads/${u.id}`, { method: "POST" }).catch(() => null);
-        if (done?.ok) break;
-        await sleep(1500);
+        if (done?.ok || done?.status === 409) break;
+        await sleep(1500 * 2 ** attempt);
       }
       patch(key, { status: "done", progress: 1, doneAt: Date.now() });
       batchDone.current++;

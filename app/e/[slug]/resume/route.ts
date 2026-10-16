@@ -12,6 +12,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const back = GUEST_HOST ? `${GUEST_URL}/${slug}` : `/e/${slug}`;
   const e = await getEventBySlug(slug);
   const key = new URL(req.url).searchParams.get("k");
-  if (e && key && key.length < 600 && (await rateLimit("resume", 60, 60_000))) await resumeGuest(e.id, key);
+  if (e && key && key.length < 600 && (await rateLimit("resume", 600, 60_000))) await resumeGuest(e.id, key);
   return new NextResponse(null, { status: 303, headers: { location: back, "cache-control": "no-store" } });
 }

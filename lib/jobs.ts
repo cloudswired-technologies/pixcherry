@@ -3,12 +3,23 @@ import { q } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { deletedEmail, deletionWarningEmail } from "@/lib/email-templates";
 import { getSetting } from "@/lib/settings";
-import { deleteObject, deletePrefix, photoKeys } from "@/lib/storage";
+import { deleteObject, deletePrefix, objectExists, photoKeys } from "@/lib/storage";
 
 // Hourly housekeeping (called by /api/cron/hourly).
 
-/** Upload slots reserved but never finished: give them back. */
+/**
+ * Upload slots reserved but never finished: give them back. A photo that did reach
+ * storage (the phone lost the connection before confirming) is processed instead.
+ */
 export async function releaseStaleUploads() {
+  const old = await q<{ id: string; event_id: string }>(
+    "select id, event_id from photos where status = 'pending' and created_at < now() - interval '1 hour' limit 500",
+  );
+  for (const r of old) {
+    if (await objectExists(photoKeys(r.event_id, r.id).incoming).catch(() => false)) {
+      await q("update photos set status = 'uploaded', uploaded_at = now() where id = $1 and status = 'pending'", [r.id]);
+    }
+  }
   const rows = await q<{ id: string; event_id: string; guest_id: string | null }>(
     `update photos set status = 'failed', error = 'upload not finished'
      where status = 'pending' and created_at < now() - interval '1 hour' returning id, event_id, guest_id`,
@@ -53,8 +64,10 @@ export async function purgeExpiredEvents() {
 }
 
 /**
- * Deletes everything guests put into an event: files in storage, wishes and
- * hearts. The event row and its payments stay (receipts, accounting).
+ * Deletes everything guests put into an event: files in storage, wishes,
+ * hearts, reports, captions, and who the guests were (name, selfie, phone and network
+ * signals). Guest rows stay as anonymous counts, and the event row and its payments
+ * stay (receipts, accounting).
  * Used by the retention job and by "Delete event". Returns objects removed.
  */
 export async function purgeEvent(eventId: string, actorId: string | null, reason: "retention" | "deleted") {
@@ -63,7 +76,12 @@ export async function purgeEvent(eventId: string, actorId: string | null, reason
   // Wishes and hearts are guests' personal data: they go with the photos.
   await q("delete from wishes where event_id = $1", [eventId]);
   await q("delete from photo_votes v using photos p where p.id = v.photo_id and p.event_id = $1", [eventId]);
-  await q("update photos set vote_count = 0 where event_id = $1", [eventId]);
+  await q("delete from photo_reports r using photos p where p.id = r.photo_id and p.event_id = $1", [eventId]);
+  await q("update photos set vote_count = 0, report_count = 0, caption = null, tags = '{}' where event_id = $1", [eventId]);
+  await q(
+    "update guests set name = null, avatar_key = null, device_info = null, device_hash = null, ip_hash = null, net_hash = null, addr_hash = null, extra_token_hashes = '{}' where event_id = $1",
+    [eventId],
+  );
   await q(
     "update events set purged_at = now(), deletion_at = least(coalesce(deletion_at, now()), now()), photo_count = 0, slot_count = 0, bytes_used = 0, cover_key = null, logo_key = null, uploads_enabled = false where id = $1",
     [eventId],

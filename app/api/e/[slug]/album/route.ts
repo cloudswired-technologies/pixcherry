@@ -12,8 +12,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const user = await currentUser();
   const isOwner = !!user && (user.id === e.owner_id || user.is_admin);
   if (!isOwner) {
-    if (!e.cfg.features.guest_album_download || !(await currentGuest(e.id))) return new Response("Only the organiser can download the full album.", { status: 403 });
-    if (!(await rateLimit("album-guest", 10, 3600_000))) return new Response("Please try again later.", { status: 429 });
+    const guest = e.cfg.features.guest_album_download ? await currentGuest(e.id) : null;
+    if (!guest) return new Response("Only the organiser can download the full album.", { status: 403 });
+    if (!(await rateLimit("album-guest", 5, 3600_000, guest.id))) return new Response("Please try again later.", { status: 429 });
   }
   return albumResponse(e);
 }

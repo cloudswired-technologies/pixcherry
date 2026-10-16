@@ -7,6 +7,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -99,6 +100,19 @@ export async function getObjectStream(key: string): Promise<ReadableStream<Uint8
     return (r.Body as { transformToWebStream(): ReadableStream<Uint8Array> }).transformToWebStream();
   } catch (e) {
     if ((e as { name?: string }).name === "NoSuchKey") return null;
+    throw e;
+  }
+}
+
+/** Whether an object is in storage (e.g. an upload the phone never confirmed). */
+export async function objectExists(key: string) {
+  if (driver === "local") return existsSync(localPath(key));
+  try {
+    await s3().send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+    return true;
+  } catch (e) {
+    const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (err.name === "NotFound" || err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) return false;
     throw e;
   }
 }

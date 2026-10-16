@@ -1,6 +1,7 @@
 import "server-only";
 import { one, q, tx } from "@/lib/db";
 import { deletePhoto } from "@/lib/photos";
+import { deleteObject, photoKeys } from "@/lib/storage";
 
 // Organiser tools for guests: list with activity, remove (with everything they
 // added), and merge two guests who turn out to be one person.
@@ -37,6 +38,13 @@ export async function removeGuest(eventId: string, guestId: string) {
   if (!g) return false;
   const photos = await q<{ id: string }>("select id from photos where guest_id = $1 and status in ('ready','review')", [guestId]);
   for (const p of photos) await deletePhoto(eventId, p.id);
+  // Photos still on their way up would otherwise land later, without an owner.
+  const inFlight = await q<{ id: string }>(
+    "update photos set status = 'failed', error = 'guest removed', locked_at = null where guest_id = $1 and status in ('pending','uploaded','processing') returning id",
+    [guestId],
+  );
+  for (const p of inFlight) await deleteObject(photoKeys(eventId, p.id).incoming).catch(() => {});
+  if (inFlight.length) await q("update events set slot_count = greatest(0, slot_count - $2) where id = $1", [eventId, inFlight.length]);
   await tx(async (c) => {
     // Their hearts on other people's photos go too; keep the counters right.
     await q(

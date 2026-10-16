@@ -1,6 +1,6 @@
 # PixCherry — go-live status
 
-Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com; real payments are the main thing left.
+Updated 2026-10-17 after the audit fixes (one phone one roll, venue Wi-Fi limits, promo codes, guest data on deletion). The site is live at pixcherry.com; real payments are the main thing left.
 
 ## Done
 
@@ -9,7 +9,7 @@ Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com
 | Domain + Cloudflare | pixcherry.com, app.pixcherry.com (guests), img.pixcherry.com (R2) |
 | Server | Vultr SG `ssh pixcherry`, Ubuntu 24.04, kernel 6.8.0-147 (rebooted 2026-10-16) |
 | Server hardening | SSH key-only (`/etc/ssh/sshd_config.d/00-pixcherry-hardening.conf`), fail2ban on SSH, UFW: 80/443 from Cloudflare only, port 3000 closed from outside |
-| Database | Supabase SG, migrations up to 0013; REST roles locked out of every table |
+| Database | Supabase SG, migrations up to 0014; REST roles locked out of every table |
 | R2 | Bucket `pixcherry-photos`, CORS for PUT, lifecycle `ev/` 400 days |
 | Cron | hourly cleanup, 5-minute queue/overload alerts, nightly DB dump to `/var/backups/pixcherry/` (30 days) **and R2 `pixcherry-backups/db/`** (rclone remote `r2`, set up 2026-10-14; restore-tested 2026-10-16) |
 | Edge cache | Cloudflare Page Rule `app.pixcherry.com/api/e/*/pulse` → cache everything (origin sends `s-maxage=3`) |
@@ -23,7 +23,7 @@ Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com
 3. **Root password** — SSH no longer accepts passwords, so the old root password only works in the Vultr web console. Change it there if it was ever shared.
 4. **support@pixcherry.com** — the site and FAQ point people there; make sure the mailbox (or forward) exists.
 5. **Real photos for the landing page** — the current demo photos are AI-generated; swap in real event photos when you have permission to use them (re-run the showcase, see README).
-6. Real-phone check at a test event: an iPhone (HEIC) and an Android on 4G.
+6. Real-phone check at a test event: an iPhone (HEIC) and an Android on 4G. Also: open the album link from WhatsApp and Instagram (the join form must show), and in Safari Private (it must say "You're in a private window").
 7. Terms + Privacy wording review.
 
 ## When to upgrade the server

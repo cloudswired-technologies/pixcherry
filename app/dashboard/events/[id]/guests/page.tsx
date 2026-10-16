@@ -44,8 +44,8 @@ export default async function Guests({ params, searchParams }: { params: Promise
             <div>
               <h2 className="font-bold">Possibly the same phone ({flagged.length})</h2>
               <p className="text-sm text-muted-foreground">
-                These guests joined from a phone that looks the same as an earlier guest&apos;s, on the same network, and said they were someone else. Merge them if it&apos;s one person
-                (one roll), or keep them apart.
+                These guests joined with the same phone model as an earlier guest, from the same phone or the same small network. It may be one person on two browsers. Merge
+                them if it&apos;s one person (one roll), or keep them apart.
               </p>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { currentGuest, currentGuestKey } from "@/lib/guests";
 import { currentUser } from "@/lib/auth";
 import { APP_URL } from "@/lib/env";
 import { albumOpen, eventPhase, uploadsOpen } from "@/lib/limits";
+import { memo } from "@/lib/memo";
 import { listPhotos } from "@/lib/photos";
 import { publicUrl } from "@/lib/storage";
 import { turnstileSiteKey } from "@/lib/turnstile";
@@ -75,10 +76,10 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
   const share = guestUrl(e.slug);
   const [first, missions, done, stats, tagAlbums, key, qr] = await Promise.all([
     listPhotos(e.id, { order: "new", limit: 60, viewer: guest?.id ?? null }),
-    f.missions ? listMissions(e.id) : Promise.resolve([]),
+    f.missions ? memo(`missions:${e.id}`, 3000, () => listMissions(e.id)) : Promise.resolve([]),
     f.missions && guest ? missionsDoneBy(guest.id) : Promise.resolve([]),
-    eventStats(e.id),
-    f.tags ? listTagAlbums(e.id) : Promise.resolve([]),
+    memo(`stats:${e.id}`, 3000, () => eventStats(e.id)),
+    f.tags ? memo(`tags:${e.id}`, 3000, () => listTagAlbums(e.id)) : Promise.resolve([]),
     guest ? currentGuestKey(e.id) : Promise.resolve(null),
     QRCode.toString(share, { type: "svg", margin: 1, color: { dark: "#1f2937", light: "#ffffff" } }),
   ]);

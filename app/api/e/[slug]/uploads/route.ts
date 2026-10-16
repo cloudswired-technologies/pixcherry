@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEventBySlug } from "@/lib/events";
-import { currentGuest } from "@/lib/guests";
+import { currentGuest, noteGuestAddress } from "@/lib/guests";
 import { uploadsOpen } from "@/lib/limits";
 import { MAX_FILES_PER_REQUEST, reserveUploads } from "@/lib/photos";
 import { rateLimit } from "@/lib/rate-limit";
@@ -26,12 +26,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!files.length) return NextResponse.json({ error: "No files." }, { status: 400 });
 
   const perMinute = await getSetting("upload_rate_per_minute");
-  // Per phone, plus a loose per-IP cap (a whole venue can share one Wi-Fi IP).
-  if (!(await rateLimit("upload-guest", Number(perMinute) || 30, 60_000, guest.id, files.length)) || !(await rateLimit("upload-ip", 1200, 60_000, undefined, files.length))) {
+  // Per phone only: a whole venue can share one Wi-Fi IP, and joining passed the bot check.
+  if (!(await rateLimit("upload-guest", Number(perMinute) || 30, 60_000, guest.id, files.length))) {
     return NextResponse.json({ error: "Too many uploads at once. Please wait a minute." }, { status: 429 });
   }
 
   const r = await reserveUploads(e, guest.id, files);
+  // Phones change their IPv6 address now and then: keep the latest, for "one phone, one roll".
+  await noteGuestAddress(guest.id).catch(() => {});
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 409 });
   return NextResponse.json(r);
 }

@@ -60,6 +60,8 @@ The demo camera plays a real photo through Chromium's fake webcam (`--use-file-f
 | `lib/jobs.ts`, `app/api/cron/*` | Hourly retention/warnings/cleanup; 5-minute queue + overload alerts |
 | `lib/capacity.ts` | "Server load ahead" (overlapping events) |
 | `lib/payments.ts` | CHIP purchases, upgrades, add-ons, promo codes |
+| `lib/guests.ts`, `lib/client/private-mode.ts` | Guest sessions, "one phone, one roll" (IPv6 address + phone model), private-window check |
+| `lib/rate-limit.ts`, `lib/memo.ts` | Per-phone rate limits, 3-second album-wide caches |
 | `app/(site)` | Landing, guide, login, terms, privacy |
 | `app/admin` | Platform admin |
 | `deploy/`, `scripts/deploy.mjs` | VPS setup, systemd, Caddy, backups, deploy with rollback |

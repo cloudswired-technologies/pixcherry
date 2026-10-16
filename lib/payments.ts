@@ -96,7 +96,12 @@ export async function startPurchase(user: { id: string; email: string; name: str
   const id = row!.id;
   const back = `${APP_URL}/dashboard/events/${qt.event.id}/paid?purchase=${id}`;
   if (qt.amount === 0) {
-    await applyPaid(id, null);
+    try {
+      await applyPaid(id, null);
+    } catch (err) {
+      await q("update purchases set status = 'failed' where id = $1 and status = 'pending'", [id]);
+      throw err;
+    }
     return back;
   }
   const creds = platformChip();
@@ -162,10 +167,35 @@ export async function applyPaid(purchaseId: string, chipId: string | null) {
     await q("update purchases set status = 'paid', paid_at = now(), receipt_no = $2, chip_purchase_id = coalesce(chip_purchase_id, $3) where id = $1", [p.id, receipt!.no, chipId], c);
     await one("select id from events where id = $1 for update", [p.event_id], c);
 
+    // The promo is claimed here, atomically, so two people using a one-time code at the
+    // same moment can't both get it. A free order then fails; someone who already paid
+    // CHIP the discounted price keeps it (logged for the admin).
+    if (p.promo_code_id) {
+      const claimed = await one(
+        "update promo_codes set used_count = used_count + 1 where id = $1 and (max_uses is null or used_count < max_uses) returning id",
+        [p.promo_code_id],
+        c,
+      );
+      if (!claimed) {
+        if (p.amount_cents === 0) throw new PaymentError("That promo code has just been used up.");
+        await q("update promo_codes set used_count = used_count + 1 where id = $1", [p.promo_code_id], c);
+        await audit(p.user_id, "promo.over_limit", p.event_id, { purchase: p.id, promo: p.promo_code_id }, c);
+      }
+    }
+
     if (p.kind === "plan" || p.kind === "upgrade") {
       const plan = p.plan_id ? await getPlan(p.plan_id, c) : null;
       if (!plan) throw new Error(`plan for purchase ${p.id} is gone`);
-      await q(
+      // A second package paid for the same event (two checkout tabs): never downgrade; the admin refunds.
+      const cur = await one<{ paid_at: Date | null; price: number | null }>(
+        "select paid_at, (plan_snapshot->>'price_cents')::int as price from events where id = $1",
+        [p.event_id],
+        c,
+      );
+      if (p.kind === "plan" && cur?.paid_at) await audit(p.user_id, "purchase.duplicate", p.event_id, { purchase: p.id, amount_cents: p.amount_cents }, c);
+      const keep = p.kind === "plan" && !!cur?.paid_at && (cur.price ?? 0) >= plan.price_cents;
+      if (!keep)
+        await q(
         `update events set plan_id = $2, plan_snapshot = $3, paid_at = coalesce(paid_at, now()), updated_at = now() where id = $1`,
         [p.event_id, plan.id, JSON.stringify(snapshot(plan))],
         c,
@@ -179,7 +209,6 @@ export async function applyPaid(purchaseId: string, chipId: string | null) {
         c,
       );
     }
-    if (p.promo_code_id) await q("update promo_codes set used_count = used_count + 1 where id = $1", [p.promo_code_id], c);
     await refreshDeletion(p.event_id, c);
     await audit(p.user_id, `purchase.${p.kind}.paid`, p.event_id, { purchase: p.id, amount_cents: p.amount_cents }, c);
     const owner = await one<{ email: string }>("select email from users where id = $1", [p.user_id], c);

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getEventBySlug } from "@/lib/events";
-import { currentGuest } from "@/lib/guests";
+import { cookieGuestId, currentGuest } from "@/lib/guests";
 import { listPhotos } from "@/lib/photos";
-import { rateLimit } from "@/lib/rate-limit";
+import { guestLimit } from "@/lib/rate-limit";
 
 // Gallery feed for the guest page: newest / oldest / top, one uploader's folder,
 // one mission, and "since" polling for new photos.
@@ -10,7 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const e = await getEventBySlug((await params).slug);
   if (!e || !e.paid_at || e.purged_at) return NextResponse.json({ error: "Event not found." }, { status: 404 });
-  if (!(await rateLimit("gallery", 1500, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
+  if (!(await guestLimit("gallery", 120, 60_000, await cookieGuestId(e.id)))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
   const u = new URL(req.url);
   const guest = await currentGuest(e.id);
   const o = u.searchParams.get("order");

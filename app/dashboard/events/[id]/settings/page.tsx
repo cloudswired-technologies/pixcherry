@@ -173,7 +173,7 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               {[
                 { v: "both", label: "Snap and upload", help: "Guests take photos with Snap or pick them from their phone gallery.", on: e.uploads_enabled && !e.camera_only },
                 ...(f.camera
-                  ? [{ v: "camera", label: "Snap only", help: "Only photos taken with Snap during the event — no old photos from the gallery.", on: e.uploads_enabled && e.camera_only }]
+                  ? [{ v: "camera", label: "Snap only", help: "Guests get the Snap camera only, no button to pick photos from their gallery, so the album fills with photos taken at the event.", on: e.uploads_enabled && e.camera_only }]
                   : []),
                 { v: "closed", label: "Closed", help: "No new photos. Guests can still look, heart and download.", on: !e.uploads_enabled },
               ].map((o) => (
@@ -200,7 +200,7 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
             <Toggle
               name="one_phone_one_roll"
               label="One phone, one roll"
-              help="A phone that already joined (even from another browser) continues as the same guest, with the same shots left. Turn off if many guests share one phone model on the same Wi-Fi and get mixed up — repeats are then only flagged in Guests."
+              help="A phone that already joined continues as the same guest, even in another browser, with the same shots left. Guests are never blocked for having the same phone model or the same Wi-Fi. Off: they can choose 'I'm someone else', and it's flagged in Guests."
               defaultChecked={e.one_phone_one_roll}
             />
             {f.custom_branding ? (

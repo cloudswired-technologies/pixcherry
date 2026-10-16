@@ -31,6 +31,7 @@ import { Turnstile } from "@/components/turnstile";
 import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
 import { deviceSignals } from "@/lib/client/device";
+import { isPrivateWindow } from "@/lib/client/private-mode";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
@@ -179,7 +180,9 @@ export function GuestApp(p: Props) {
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
+  const statsAt = useRef(0);
   const loadStats = useCallback(async () => {
+    statsAt.current = Date.now();
     const r = await fetch(`/api/e/${p.slug}/stats`).catch(() => null);
     if (!r?.ok) return;
     const st = (await r.json()) as Stats;
@@ -258,9 +261,13 @@ export function GuestApp(p: Props) {
       setOthers(b.uploading.filter((u) => u.guest !== meRef.current));
       if (b.latest && b.latest !== latestRef.current) {
         // A new photo landed somewhere: fetch it now instead of waiting for the slow poll.
+        // Spread over a few seconds so hundreds of phones don't all ask at the same moment,
+        // and the leaderboard at most every 15 s.
         if (latestRef.current) {
-          pollAll();
-          loadStats();
+          setTimeout(() => {
+            pollAll();
+            if (Date.now() - statsAt.current > 15_000) loadStats();
+          }, Math.random() * 3000);
         }
         latestRef.current = b.latest;
       }
@@ -1059,8 +1066,10 @@ function JoinForm({
   const [device, setDevice] = useState("");
   const [taken, setTaken] = useState<JoinState["nameTaken"] | null>(null);
   const [busy, startBusy] = useTransition();
+  const [priv, setPriv] = useState(false);
   useEffect(() => {
     deviceSignals().then((d) => setDevice(d ? JSON.stringify(d) : ""));
+    isPrivateWindow().then(setPriv);
   }, []);
   useEffect(() => {
     if (!siteKey) return;
@@ -1069,6 +1078,7 @@ function JoinForm({
     return () => clearTimeout(t);
   }, [siteKey, widget]);
   if (!canUpload) return <p className="text-sm text-muted-foreground">This album is closed for new photos and wishes.</p>;
+  if (priv) return <PrivateWindow />;
   // Waiting for the bot check; if it asks for a tick, wait for that (never submit without it).
   const waiting = !!siteKey && !token && (!slow || tick);
   const submit = (e: FormEvent<HTMLFormElement>) => {
@@ -1137,7 +1147,7 @@ function JoinForm({
       {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} onInteractive={() => setTick(true)} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
       <input type="hidden" name="device" value={device} />
-      {match && (match.byDevice || (match.name ?? "").toLowerCase() === name.trim().toLowerCase()) ? (
+      {match ? (
         <div className="grid gap-2 rounded-2xl bg-brand-soft p-4" role="group" aria-label="Welcome back">
           {match.strict ? (
             <p className="text-sm">
@@ -1146,7 +1156,7 @@ function JoinForm({
             </p>
           ) : (
             <p className="text-sm">
-              <strong>Welcome back{match.name ? `, ${match.name}` : ""}! 👋</strong> {match.byDevice ? "This phone already joined" : `Someone called ${match.name} already joined from this phone`}
+              <strong>Welcome back{match.name ? `, ${match.name}` : ""}! 👋</strong> This phone already joined
               {match.photos ? ` with ${match.photos} photo${match.photos === 1 ? "" : "s"}` : ""}. Is that you?
             </p>
           )}
@@ -1155,7 +1165,7 @@ function JoinForm({
             {match.strict ? "Continue" : "Yes, continue"} as {match.name ?? "that guest"}
           </button>
           {match.strict ? (
-            <p className="text-xs text-muted-foreground">Not you? Someone with the same phone model on the same Wi-Fi can switch to mobile data and try again, or ask the hosts.</p>
+            <p className="text-xs text-muted-foreground">Not you? Switch to mobile data and try again, or ask the hosts.</p>
           ) : (
             <button name="same" value="new" disabled={busy || waiting} className="py-1.5 text-sm font-semibold text-muted-foreground">
               No, I&apos;m someone else
@@ -1169,6 +1179,32 @@ function JoinForm({
         </button>
       )}
     </form>
+  );
+}
+
+/** A private window forgets the guest when it closes: look around, join from the normal browser. */
+function PrivateWindow() {
+  const [copied, setCopied] = useState(false);
+  const url = typeof location === "undefined" ? "" : location.origin + location.pathname;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="grid gap-3" role="group" aria-label="Private window">
+      <p className="text-sm">
+        <strong>🕶️ You&apos;re in a private window.</strong> It forgets you when it closes, so you can look around but not join here. To snap and share, open this link in
+        your normal browser.
+      </p>
+      <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} aria-label="Album link" className="h-11 rounded-2xl border border-input bg-muted px-3 text-sm" />
+      <button type="button" onClick={copy} className="rounded-full bg-brand py-3 font-bold text-white shadow-cherry">
+        {copied ? "Link copied ✓" : "Copy link"}
+      </button>
+    </div>
   );
 }
 

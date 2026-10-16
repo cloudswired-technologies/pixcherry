@@ -39,7 +39,16 @@
 - Photos per event is derived: guests × photos per guest (admins can override per event).
 - On payment the plan is **snapshotted** into the event; later plan edits never change paid events. Effective settings = snapshot + paid add-ons, then admin overrides (`lib/limits.ts`).
 - Live packages (2026-10-16): Free RM0 (30 guests × 10 photos, 3 days), Premium RM129 (300 × 20, 14 days, everything except branding), Exclusive RM299 (1000 × 30, 60 days, everything). Add-ons: +100 guests RM20, +10 photos per guest RM15, +30 days RM20.
-- Upgrades mid-event pay the difference; promo codes (percent/fixed, expiry, max uses; 100% skips CHIP).
+- Upgrades mid-event pay the difference; promo codes (percent/fixed, expiry, max uses; 100% skips CHIP). A code is claimed atomically when the purchase is applied, so a one-time code used twice at the same moment works once; a second package paid for the same event never downgrades it and is logged (`purchase.duplicate`) for a refund.
+
+## Guests: one phone, one roll
+
+A browser cookie identifies a guest. Without it (another browser, cleared data, private window) the join checks, in order (`lib/guests.ts findSamePhone`, decided 2026-10-17):
+1. **Same full IPv6 address + same phone model** as an earlier guest → that guest's roll (strict by default; with "One phone, one roll" off they may say "someone else", flagged). Each phone has its own IPv6 address even on a shared Wi-Fi; both browsers of one phone share it. If guests on different phone models used the address (a router or relay putting phones behind one address), it's treated as shared: no match. The address is refreshed on every upload because phones rotate it.
+2. **IPv4** (a venue Wi-Fi or a telco shares one address): never matched, never blocked. A same-model phone on a small IPv4 network (≤2 guests) is only flagged for the organiser; once 3 guests share the address the flags are cleared.
+3. **Private window**: Safari and Firefox can be detected (their private file system is refused) → view only, "open in your normal browser". Chrome/Edge/Samsung can't (a real Edge InPrivate window reports the same storage as a normal one), and in-app browsers (WhatsApp, Instagram…) are never treated as private.
+
+Known gaps, accepted: IPv4-only connections, changing network between browsers, iCloud Private Relay, and an IPv6 address that rotated. The roll still has the package's limits and the host can merge or remove guests. IP is never a reason to block anyone.
 
 ## Engagement (why there are more features than the MVP brief)
 
@@ -47,7 +56,7 @@ A shared folder gets few uploads; people share more when it's a game. Built: Pix
 
 ## Retention
 
-`deletion_at = event end + retention_days`. The hourly job emails a warning `warn_days` before, then deletes `ev/<event>/` in R2 and marks the event purged. An R2 lifecycle rule on `ev/` (400 days) is the backstop.
+`deletion_at = event end + retention_days`. The hourly job emails a warning `warn_days` before, then deletes `ev/<event>/` in R2 and marks the event purged. Purging also forgets who the guests were (PDPA): names, selfies, phone and network signals, captions, hashtags, hearts, reports and wishes go; guest rows stay only as counts. Dates are fixed once a paid event starts, so the deletion date can't be pushed out. An R2 lifecycle rule on `ev/` (400 days) is the backstop.
 
 ## Serving and downloads
 
@@ -63,7 +72,8 @@ A shared folder gets few uploads; people share more when it's a game. Built: Pix
 ## Security
 
 - Event links are readable slugs (organiser's choice) checked for availability; renamed links keep redirecting. Albums are `noindex`.
-- Rate limits keyed on guest token (venue Wi-Fi shares an IP) plus loose IP limits; Turnstile on guest join and organiser login.
+- Guest rate limits are per phone (the signed guest cookie; joining passed Turnstile). Only people who haven't joined are counted per IP, with caps 100× one phone's, because a whole venue shares one Wi-Fi IP. Album-wide answers (stats, leaderboards, folders, missions) are cached 3 s per album and phones spread their refresh over 3 s. Tested: 400 joined guests + 700 visitors from one IP, 2,300 requests, none refused (`e2e/audit-fixes.spec.ts`). Turnstile on guest join and organiser login.
+- An upload whose "done" never reached the server (bad Wi-Fi) is found in R2 by the hourly job and processed, not lost.
 - Payments activate only after the CHIP callback signature is verified or the purchase is re-fetched as paid.
 - Server: SSH key-only (no passwords, root by key), fail2ban on SSH, ports 80/443 open to Cloudflare only, the app port (3000) closed from outside, `.env` mode 600, deploys refuse to ship `.txt/.log/.env/key` files.
 

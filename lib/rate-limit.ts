@@ -23,3 +23,13 @@ export async function rateLimit(name: string, limit: number, windowMs: number, k
   b.count += cost;
   return b.count <= limit;
 }
+
+/**
+ * Guest pages: a whole venue can share one Wi-Fi IP, so a joined guest is limited per
+ * phone (`guestId`, from the signed cookie; joining passed the bot check). Only people
+ * who haven't joined are counted per IP, with a cap 100× looser than one phone's.
+ */
+export async function guestLimit(name: string, perGuest: number, windowMs: number, guestId: string | null | undefined, cost = 1) {
+  if (guestId) return rateLimit(name, perGuest, windowMs, `g:${guestId}`, cost);
+  return rateLimit(`${name}-anon`, perGuest * 100, windowMs, undefined, cost);
+}

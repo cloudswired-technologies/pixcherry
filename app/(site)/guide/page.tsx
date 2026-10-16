@@ -36,7 +36,7 @@ const HOST: Step[] = [
     title: "Make it yours",
     text: [
       "Add a cover photo. Tap a few ready-made snap missions (\"Selfie with the host\", \"Big group photo\") or write your own. Choose hashtags guests can tap.",
-      "Decide how guests add photos: snap and upload, snap only (only new photos taken at the event), or closed.",
+      "Decide how guests add photos: snap and upload, snap only (the Snap camera, no gallery button), or closed.",
     ],
     img: "/landing/guide-missions.webp",
     alt: "Missions page with ideas to add",

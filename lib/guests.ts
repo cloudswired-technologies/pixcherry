@@ -26,6 +26,12 @@ export async function currentGuest(eventId: string): Promise<Guest | null> {
   return guestFromKey(eventId, (await cookies()).get(cookieName(eventId))?.value);
 }
 
+/** The guest id in this browser's signed cookie, without a database read (for rate limits). */
+export async function cookieGuestId(eventId: string) {
+  const c = unsign<GuestCookie>((await cookies()).get(cookieName(eventId))?.value);
+  return c && c.e === eventId ? c.g : null;
+}
+
 /**
  * The guest's signed session, for the home-screen app: an installed web app
  * (iOS especially) doesn't share the browser's cookies, so its start link carries this.
@@ -56,20 +62,32 @@ export type JoinResult = { ok: true; guest: Guest; key: string } | { ok: false; 
 
 const ipHash = async () => sha256(`ip:${await clientIp()}`).slice(0, 16);
 
-/** "2001:db8:a:b::1" -> "2001:0db8:000a:000b" (the /64 a Wi-Fi or a phone's data line keeps all day). */
-function v6Prefix(ip: string) {
+/** "2001:db8::1" -> its 8 groups, zero-padded and lower case. */
+function v6Groups(ip: string) {
   const [head, tail] = ip.split("::");
   const h = head ? head.split(":") : [];
   const t = tail ? tail.split(":") : [];
   const full = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
-  return full.slice(0, 4).map((x) => x.padStart(4, "0").toLowerCase()).join(":");
+  return full.map((x) => x.padStart(4, "0").toLowerCase());
 }
 
-/** Network of this request: IPv4 address, or IPv6 /64 (privacy addresses rotate inside it). */
-async function netHash() {
+/** This request's address: IPv4 (incl. "::ffff:1.2.3.4") or the IPv6 groups. */
+async function requestAddress() {
   const ip = await clientIp();
   const v4 = ip.match(/(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
-  return sha256(`net:${v4 ?? (ip.includes(":") ? v6Prefix(ip) : ip)}`).slice(0, 16);
+  return v4 ? { v4 } : ip.includes(":") ? { v6: v6Groups(ip) } : { v4: ip };
+}
+
+/** Network of this request: IPv4 address, or IPv6 /64 (a Wi-Fi, or one phone's data line). */
+async function netHash() {
+  const a = await requestAddress();
+  return sha256(`net:${a.v4 ?? a.v6!.slice(0, 4).join(":")}`).slice(0, 16);
+}
+
+/** The full IPv6 address (only one phone uses it at a time), or null on IPv4. */
+async function addrHash() {
+  const a = await requestAddress();
+  return a.v6 ? sha256(`addr:${a.v6.join(":")}`).slice(0, 16) : null;
 }
 
 /** Device signals sent by the phone (lib/client/device.ts), validated and trimmed. */
@@ -92,17 +110,22 @@ export function parseDevice(raw: unknown): DeviceInfo | null {
   }
 }
 
+/** Same phone model, matched loosely: one browser may hide the GPU or the core count. */
+function sameModel(a: DeviceInfo, b: DeviceInfo) {
+  return a.s === b.s && Number(a.r) === Number(b.r) && a.t === b.t && Number(a.p) === Number(b.p) && (a.g === b.g || Number(a.c) === Number(b.c));
+}
+
 /** Creates the guest (respecting the event's guest limit) and sets the cookie. */
 export async function joinEvent(e: EventWithConfig, name: string | null, device: DeviceInfo | null = null, samePhoneAs: string | null = null): Promise<JoinResult> {
   const token = randomToken();
-  const [ip, net] = await Promise.all([ipHash(), netHash()]);
+  const [ip, net, addr] = await Promise.all([ipHash(), netHash(), addrHash()]);
   const guest = await tx(async (c) => {
     const ev = await one<{ guest_count: number }>("select guest_count from events where id = $1 for update", [e.id], c);
     if (!ev || ev.guest_count >= e.cfg.limits.max_guests) return null;
     const g = await one<Guest>(
-      `insert into guests (event_id, name, token_hash, ip_hash, net_hash, device_info, same_phone_as) values ($1, $2, $3, $4, $5, $6, $7)
+      `insert into guests (event_id, name, token_hash, ip_hash, net_hash, addr_hash, device_info, same_phone_as) values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning id, event_id, name, upload_count, is_blocked`,
-      [e.id, name, sha256(token), ip, net, device ? JSON.stringify(device) : null, samePhoneAs],
+      [e.id, name, sha256(token), ip, net, addr, device ? JSON.stringify(device) : null, samePhoneAs],
       c,
     );
     await q("update events set guest_count = guest_count + 1 where id = $1", [e.id], c);
@@ -114,35 +137,51 @@ export async function joinEvent(e: EventWithConfig, name: string | null, device:
   return { ok: true, guest, key };
 }
 
-export type PhoneMatch = { id: string; name: string | null; photos: number; blocked: boolean; byDevice: boolean; sameNet: boolean };
+/** Keeps the guest's latest IPv6 address (phones change it now and then), so another browser of the same phone still matches. */
+export async function noteGuestAddress(guestId: string) {
+  const addr = await addrHash();
+  if (addr) await q("update guests set addr_hash = $2 where id = $1 and addr_hash is distinct from $2", [guestId, addr]);
+}
+
+export type PhoneMatch = { id: string; name: string | null; photos: number; blocked: boolean };
 
 /**
- * An earlier guest who is probably this person on another browser of the same phone.
- * Signals, matched loosely and together:
- *  - device: same screen, pixel ratio, time zone and touch points, plus the same GPU or
- *    the same CPU core count (one browser may hide one of them);
- *  - network: same IPv4, or same IPv6 /64;
- *  - name: same name (case-insensitive) on the same network.
+ * Who this phone already is in the album, when it comes back without the cookie
+ * (another browser, cleared data, a private window).
+ *  - match: an earlier guest with the same IPv6 address and the same phone model.
+ *    Each phone has its own IPv6 address, even on a shared Wi-Fi. If guests on
+ *    different phone models used the address, it's shared (a router or relay that
+ *    puts phones behind one address): no match.
+ *  - similar (IPv4 only): a guest with the same phone model on the same small network
+ *    (maybe one person on two browsers): only flagged for the organiser, never blocked.
+ *    When a third guest joins from the address it's a venue Wi-Fi: its flags are cleared.
+ * IPv4 never matches: a whole venue or many telco customers share one address.
  */
-export async function findSamePhone(eventId: string, name: string | null, device: DeviceInfo | null): Promise<PhoneMatch | null> {
-  if (!name && !device) return null;
-  const [ip, net] = await Promise.all([ipHash(), netHash()]);
-  const r = await one<{ id: string; name: string | null; photos: number; is_blocked: boolean; by_device: boolean; same_net: boolean }>(
-    `select * from (
-       select g.id, g.name, g.is_blocked, g.upload_count, g.created_at,
-         (g.net_hash = $3 or g.ip_hash = $2) as same_net,
-         coalesce($5::jsonb is not null and g.device_info is not null
-           and g.device_info->>'s' = $5::jsonb->>'s' and g.device_info->>'r' = $5::jsonb->>'r'
-           and g.device_info->>'t' = $5::jsonb->>'t' and g.device_info->>'p' = $5::jsonb->>'p'
-           and (g.device_info->>'g' = $5::jsonb->>'g' or g.device_info->>'c' = $5::jsonb->>'c'), false) as by_device,
+export async function findSamePhone(eventId: string, device: DeviceInfo | null): Promise<{ match: PhoneMatch | null; similar: string | null }> {
+  if (!device) return { match: null, similar: null };
+  const [net, addr] = await Promise.all([netHash(), addrHash()]);
+  if (addr) {
+    const rows = await q<{ id: string; name: string | null; is_blocked: boolean; device_info: DeviceInfo | null; same_phone_as: string | null; photos: number }>(
+      `select g.id, g.name, g.is_blocked, g.device_info, g.same_phone_as,
          (select count(*)::int from photos p where p.guest_id = g.id and p.status in ('ready','review')) as photos
-       from guests g where g.event_id = $1 and g.same_phone_as is null
-     ) x
-     where x.by_device or (x.same_net and $4::text is not null and lower(x.name) = lower($4))
-     order by x.by_device desc, x.same_net desc, x.upload_count desc, x.created_at limit 1`,
-    [eventId, ip, net, name, device ? JSON.stringify(device) : null],
+       from guests g where g.event_id = $1 and g.addr_hash = $2 order by g.created_at limit 20`,
+      [eventId, addr],
+    );
+    const models = rows.filter((r) => r.device_info);
+    const shared = models.some((r) => !sameModel(r.device_info!, models[0].device_info!));
+    const m = shared ? null : (models.find((r) => !r.same_phone_as && sameModel(r.device_info!, device)) ?? models.find((r) => sameModel(r.device_info!, device)));
+    if (m) return { match: { id: m.id, name: m.name, photos: m.photos, blocked: m.is_blocked }, similar: null };
+    return { match: null, similar: null };
+  }
+  const near = await q<{ id: string; device_info: DeviceInfo | null; n: number }>(
+    "select g.id, g.device_info, count(*) over ()::int as n from guests g where g.event_id = $1 and g.net_hash = $2 and g.addr_hash is null order by g.created_at limit 2",
+    [eventId, net],
   );
-  return r ? { id: r.id, name: r.name, photos: r.photos, blocked: r.is_blocked, byDevice: r.by_device, sameNet: r.same_net } : null;
+  if (near.length && near[0].n >= 2) {
+    await q("update guests set same_phone_as = null where event_id = $1 and net_hash = $2 and addr_hash is null and same_phone_as is not null", [eventId, net]);
+    return { match: null, similar: null };
+  }
+  return { match: null, similar: near.find((r) => r.device_info && sameModel(r.device_info, device))?.id ?? null };
 }
 
 /**
