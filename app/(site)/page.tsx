@@ -172,7 +172,7 @@ export default async function Home() {
                 "Add hashtags and a caption, then share. The caption is printed under the photo when it's downloaded.",
               ]}
             >
-              <div className="flex justify-center gap-4">
+              <div className="flex items-start justify-center gap-4">
                 <PhoneShot src="/landing/f-camera.webp" alt="PixCamera with the Kodak Gold look" className="w-[46%] max-w-[15rem]" />
                 <PhoneShot src="/landing/f-camera-review.webp" alt="Reviewing a shot with a caption" className="mt-12 w-[46%] max-w-[15rem]" />
               </div>
@@ -188,7 +188,7 @@ export default async function Home() {
                 "Highlights shows the best moments, and every guest gets their own page of photos.",
               ]}
             >
-              <div className="flex justify-center gap-4">
+              <div className="flex items-start justify-center gap-4">
                 <PhoneShot src="/landing/f-highlights.webp" alt="Highlights with best moments" className="w-[46%] max-w-[15rem]" />
                 <PhoneShot src="/landing/f-missions.webp" alt="Snap missions" className="mt-12 w-[46%] max-w-[15rem]" />
               </div>
