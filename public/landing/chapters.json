@@ -1,0 +1,37 @@
+{
+  "start": 0,
+  "cut": [
+    16.5,
+    53
+  ],
+  "chapters": [
+    {
+      "at": 0.5,
+      "title": "Scan the QR code — the album opens. No app."
+    },
+    {
+      "at": 4.8,
+      "title": "Tap Snap, add your name and a selfie"
+    },
+    {
+      "at": 14.1,
+      "title": "Pick a film look, then take the shot"
+    },
+    {
+      "at": 31.7,
+      "title": "Add a caption and share it with everyone"
+    },
+    {
+      "at": 38.8,
+      "title": "It lands in the shared album in seconds"
+    },
+    {
+      "at": 42.1,
+      "title": "Browse everyone's photos and heart your favourites"
+    },
+    {
+      "at": 47,
+      "title": "Leave a wish for the hosts"
+    }
+  ]
+}

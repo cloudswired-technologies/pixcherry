@@ -38,7 +38,7 @@ export const FEATURES: { key: FeatureKey; label: string; help: string; pricing: 
   { key: "hide_powered_by", label: "Hide \"Powered by PixCherry\"", help: "Removes the PixCherry footer from the guest page.", pricing: "No PixCherry branding" },
   { key: "moderation", label: "Photo approval", help: "Organiser can choose to approve photos before guests see them.", pricing: "Approve photos before they show" },
   { key: "slideshow", label: "Live slideshow", help: "Full-screen slideshow page for a projector or TV.", pricing: "Live slideshow for the big screen" },
-  { key: "camera", label: "Snap with film looks", help: "Guests snap with their phone camera, then pick a film look, mission, hashtags and caption before sharing. Organiser can allow only new snaps (no gallery uploads).", pricing: "Snap with 13 film looks" },
+  { key: "camera", label: "Snap with film looks", help: "Guests snap with their phone camera, then pick a film look, mission, hashtags and caption before sharing. Organiser can allow only new snaps (no gallery uploads).", pricing: "Snap with 12 film looks" },
   { key: "wishes", label: "Wishes wall", help: "Guests leave messages for the hosts, shown on the guest page and slideshow.", pricing: "Wishes wall for the hosts" },
   { key: "voting", label: "Hearts & leaderboard", help: "Guests heart photos; Top photos and Top snappers leaderboards.", pricing: "Hearts and live leaderboard" },
   { key: "tags", label: "Hashtags", help: "Guests tag photos with one tap (#reception, #family…); Highlights shows an album per hashtag.", pricing: "Hashtag albums" },

@@ -65,7 +65,7 @@ const PixCamera = dynamic(() => import("./camera").then((m) => m.PixCamera), { s
 const Develop = dynamic(() => import("./develop").then((m) => m.Develop), { ssr: false });
 
 type Features = { camera: boolean; wishes: boolean; voting: boolean; missions: boolean; albumDownload: boolean; tags: boolean; slideshow: boolean };
-type TagAlbum = { tag: string; count: number; cover: string | null };
+type TagAlbum = { tag: string; count: number; cover: string | null; covers?: string[] };
 type Joined = { id: string; name: string | null; uploaded: number; blocked: boolean; avatar?: string | null };
 
 type Props = {
@@ -457,6 +457,15 @@ export function GuestApp(p: Props) {
       ? stats.missions.filter((m) => m.count).map((m) => ({ k: `m:${m.id}`, title: m.title, emoji: m.emoji ?? "🎯", sub: `${m.count} photo${m.count === 1 ? "" : "s"}`, cover: m.cover ?? null }))
       : []),
   ];
+  // No two tiles with the same cover: a hashtag album takes its next-best photo if one is already shown.
+  {
+    const shown = new Set<string>();
+    for (const a of albums) {
+      const alt = a.k.startsWith("t:") ? stats.tagAlbums.find((t) => `t:${t.tag}` === a.k)?.covers : undefined;
+      if (a.cover && shown.has(a.cover)) a.cover = alt?.find((c) => !shown.has(c)) ?? a.cover;
+      if (a.cover) shown.add(a.cover);
+    }
+  }
   // Best moments: the most loved photos, or the newest ones before anyone hearts.
   const moments: Moment[] =
     f.voting && stats.topPhotos.length

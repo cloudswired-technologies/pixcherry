@@ -31,7 +31,14 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}${path}${req.nextUrl.search}`, 307);
   }
 
-  if (GUEST_URL && path.startsWith("/e/")) return NextResponse.redirect(`${GUEST_URL}${path.slice(2)}${req.nextUrl.search}`, 308);
+  // A dev server may run with the live GUEST_URL (so links and QR cards show
+  // app.pixcherry.com): on localhost, guest links (/<slug>, /e/<slug>) are served here.
+  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host ?? "");
+  if (GUEST_HOST && local) {
+    const m = path.match(GUEST_PAGE);
+    if (m && !RESERVED.has(m[1])) return rewrite(req, `/e/${m[1]}${m[2] ?? ""}`);
+  }
+  if (GUEST_URL && path.startsWith("/e/") && !local) return NextResponse.redirect(`${GUEST_URL}${path.slice(2)}${req.nextUrl.search}`, 308);
 
   if ((path.startsWith("/dashboard") || path.startsWith("/admin")) && !req.cookies.get("pc_session")) {
     const url = req.nextUrl.clone();

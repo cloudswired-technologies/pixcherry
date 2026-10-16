@@ -99,7 +99,7 @@ async function share(page: Page, ns: number[], tag: string) {
   await expect(review).toBeVisible();
   await review.getByRole("button", { name: `#${tag}` }).click();
   await page.getByRole("button", { name: new RegExp(`Share ${ns.length} photo`) }).click();
-  await expect(page.getByRole("status")).toContainText("shared", { timeout: 90_000 });
+  await expect(page.getByRole("status")).toContainText(/shared/i, { timeout: 90_000 });
 }
 
 test("showcase: wedding album end to end with real photos", async ({ browser }) => {
@@ -107,6 +107,8 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   mkdirSync(OUT, { recursive: true });
   if (!existsSync(PHOTOS) || readdirSync(PHOTOS).length < 24) execFileSync("node", ["scripts/split-collage.mjs", COLLAGE, PHOTOS, "3"], { stdio: "inherit" });
   const browsers: Browser[] = [browser];
+  // Compile the routes a join touches up front (the dev server compiles on first use).
+  for (const r of ["avatar", "uploads", "photos/00000000-0000-0000-0000-000000000000/report"]) await browser.newPage().then(async (p) => { await p.request.post(`http://localhost:3000/api/e/no-such-event/${r}`, { timeout: 120_000 }).catch(() => {}); await p.close(); });
   const tag = Date.now().toString(36);
 
   // ------------------------------------------------------------------ landing + organiser setup (desktop)
@@ -163,17 +165,17 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   await joinAlbum(siti.page, "Siti", 21);
   await shot(siti.page, "guest-join");
   await siti.page.getByRole("button", { name: /Let's go/ }).click();
-  await expect(siti.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible();
+  await expect(siti.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible({ timeout: 90_000 });
   await siti.page.locator("input[type=file][multiple]").setInputFiles(files([1, 4]));
   await expect(siti.page.getByRole("dialog", { name: "Ready to share?" })).toBeVisible();
   await siti.page.getByRole("dialog", { name: "Ready to share?" }).getByRole("button", { name: "#ceremony" }).click();
   await shot(siti.page, "guest-upload-review");
   await siti.page.getByRole("button", { name: /Share 2 photos/ }).click();
-  await expect(siti.page.getByRole("status")).toContainText("shared", { timeout: 90_000 });
+  await expect(siti.page.getByRole("status")).toContainText(/shared/i, { timeout: 90_000 });
 
-  // Amir: snaps with PixCamera (his camera sees the dance floor), mission + film look + caption.
-  const amir = await guest(browsers, slug, 3);
-  await amir.page.getByRole("button", { name: "Snap" }).click();
+  // Amir: snaps with PixCamera (his camera sees the toast), hashtag + film look + caption.
+  const amir = await guest(browsers, slug, 24);
+  await amir.page.getByRole("navigation", { name: "Actions" }).getByRole("button", { name: "Snap" }).click();
   await joinAlbum(amir.page, "Amir", 9);
   await amir.page.getByRole("button", { name: /Let's go/ }).click();
   const cam = amir.page.getByRole("dialog", { name: "Camera" });
@@ -185,10 +187,10 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   await expect(cam.getByAltText("Your photo")).toBeVisible();
   await cam.getByRole("button", { name: "Hashtags" }).click();
   const tags = cam.getByRole("dialog", { name: "Add hashtags" });
-  await tags.getByRole("button", { name: "#dancefloor" }).click();
+  await tags.getByRole("button", { name: "#reception" }).click();
   await tags.getByRole("button", { name: "Done" }).click();
   await cam.getByRole("button", { name: "Add caption" }).click();
-  await cam.getByRole("dialog", { name: "Write a caption" }).getByLabel("Caption").fill("The dance floor never stopped 💃");
+  await cam.getByRole("dialog", { name: "Write a caption" }).getByLabel("Caption").fill("Cheers to the newlyweds! 🥂");
   await cam.getByRole("button", { name: "Done" }).click();
   await shot(amir.page, "camera-review");
   await cam.getByRole("button", { name: "Share" }).click();
@@ -198,10 +200,10 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
 
   // Mei Ling, Raj, Farah, Daniel: gallery uploads with hashtags.
   const people: [string, number, number[], string][] = [
-    ["Mei Ling", 11, [8, 24], "reception"],
+    ["Mei Ling", 11, [8], "reception"],
     ["Raj", 16, [20], "food"],
-    ["Farah", 13, [22, 6], "friends"],
-    ["Daniel", 14, [3, 2], "dancefloor"],
+    ["Farah", 13, [22], "friends"],
+    ["Daniel", 14, [2], "ceremony"],
   ];
   const pages: Record<string, Page> = { Siti: siti.page, Amir: amir.page };
   for (const [name, face, ns, t] of people) {
@@ -209,15 +211,15 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
     await g.page.getByRole("button", { name: "Upload" }).click();
     await joinAlbum(g.page, name, face);
     await g.page.getByRole("button", { name: /Let's go/ }).click();
-    await expect(g.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible();
+    await expect(g.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible({ timeout: 90_000 });
     await share(g.page, ns, t);
     pages[name] = g.page;
   }
   const ready = async () => (await sql("select count(*)::int n from photos where event_id = $1 and status = 'ready'", [id]))[0].n as number;
-  await expect.poll(ready, { timeout: 120_000 }).toBe(10);
+  await expect.poll(ready, { timeout: 120_000 }).toBe(7);
   // The AI check ran on every photo and hid none of these.
   const ai = await sql("select count(*)::int n, count(*) filter (where nsfw is null)::int unchecked, count(*) filter (where flag = 'ai')::int hidden from photos where event_id = $1", [id]);
-  expect(ai[0]).toMatchObject({ n: 10, unchecked: 0, hidden: 0 });
+  expect(ai[0]).toMatchObject({ n: 7, unchecked: 0, hidden: 0 });
 
   // Captions on own photos, hearts, wishes.
   const sitiPage = pages.Siti;
@@ -273,12 +275,17 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   await m.getByRole("button", { name: "Missions", exact: true }).click();
   await shot(m, "guest-missions");
   await m.getByRole("button", { name: "Wishes" }).first().click();
+  await expect(m.getByText("— Raj").first()).toBeVisible({ timeout: 30_000 });
   await shot(m, "guest-wishes");
 
   // ------------------------------------------------------------------ host dashboard
   await d.goto(`/dashboard/events/${id}`);
   await expect(d.getByRole("heading", { name: "Aina & Hakim's Wedding" })).toBeVisible();
   await shot(d, "host-overview-desktop");
+  // Folded "Getting started": the KPIs and latest photos, as a host sees it mid-event.
+  const guide = d.getByRole("region", { name: "Getting started" }).getByRole("button", { expanded: true });
+  if (await guide.count()) await guide.first().click();
+  await shot(d, "host-overview-live-desktop");
   await d.goto(`/dashboard/events/${id}/photos`);
   await shot(d, "host-photos-desktop");
   await d.goto(`/dashboard/events/${id}/guests`);
@@ -295,6 +302,7 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   // ------------------------------------------------------------------ slideshow on a TV
   const tv = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   await tv.goto(`/e/${slug}/slideshow`);
+  await expect(tv.getByText("Waiting for the first photo…")).toHaveCount(0, { timeout: 30_000 });
   await tv.waitForTimeout(4000);
   await shot(tv, "slideshow-tv");
   await tv.waitForTimeout(6000);
@@ -305,8 +313,8 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   await sql("update events set starts_at = now() - interval '7 hours', ends_at = now() - interval '1 hour' where id = $1", [id]);
   await m.reload();
   await expect(m.getByText("The recap is ready")).toBeVisible();
-  await m.getByText("The recap is ready").click();
-  await expect(m.getByText("✨ The recap")).toBeVisible();
+  await m.getByRole("link", { name: /The recap is ready/ }).click();
+  await expect(m.getByText("✨ The recap")).toBeVisible({ timeout: 120_000 });
   await m.waitForTimeout(1800);
   await shot(m, "recap", { full: true });
   const zip = await d.request.get(`/api/e/${slug}/album`);
@@ -344,7 +352,8 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   await shot(k, "corporate-all-photos");
   const tv2 = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   await tv2.goto(`/e/${corp.slug}/slideshow`);
-  await tv2.waitForTimeout(4000);
+  await expect(tv2.getByText("Waiting for the first photo…")).toHaveCount(0, { timeout: 30_000 });
+  await tv2.waitForTimeout(5000);
   await shot(tv2, "corporate-slideshow-tv");
   await tv2.close();
 

@@ -1,56 +1,40 @@
-# PixCherry — go-live checklist
+# PixCherry — go-live status
 
-Code is complete and tested locally (see README). These steps need accounts, money or DNS, so they are done together with Shukry.
+Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com; real payments are the main thing left.
 
-## 1. Accounts and keys (Shukry)
+## Done
 
-| What | Where | Notes |
-|---|---|---|
-| Domain | pixcherry.com | ✅ Registered, zone on Cloudflare (2026-10-15) |
-| Cloudflare zone | Add the domain to Cloudflare | Nameservers at the registrar |
-| R2 bucket `pixcherry-photos` | Cloudflare → R2 | Location hint: APAC. Then: Settings → Custom domain `img.<domain>` |
-| R2 API token | R2 → Manage API tokens | Object Read & Write, **this bucket only**. Save in `Diagnose\pixcherry-r2.txt` |
-| R2 bucket `pixcherry-backups` | | For nightly DB dumps (optional but recommended) |
-| Supabase project | Region **Singapore** | ✅ Created. Only used as Postgres; needs the session-pooler connection string |
-| CHIP | Platform account (can reuse Cloudswired's) | Brand ID + secret key |
-| ZeptoMail | Add domain, DKIM + bounce CNAME | `no-reply@<domain>` |
-| Turnstile | Cloudflare → Turnstile | Widget for the domain |
-| Vultr VPS | Singapore, High Performance 1 vCPU / 2 GB, **Ubuntu 24.04** | ~USD 12/month. Hostname must differ from the domain (e.g. `pixcherry-v1`). 1 GB works only with WORKER_CONCURRENCY=1 + swap |
+| What | Notes |
+|---|---|
+| Domain + Cloudflare | pixcherry.com, app.pixcherry.com (guests), img.pixcherry.com (R2) |
+| Server | Vultr SG `ssh pixcherry`, Ubuntu 24.04, kernel 6.8.0-147 (rebooted 2026-10-16) |
+| Server hardening | SSH key-only (`/etc/ssh/sshd_config.d/00-pixcherry-hardening.conf`), fail2ban on SSH, UFW: 80/443 from Cloudflare only, port 3000 closed from outside |
+| Database | Supabase SG, migrations up to 0013; REST roles locked out of every table |
+| R2 | Bucket `pixcherry-photos`, CORS for PUT, lifecycle `ev/` 400 days |
+| Cron | hourly cleanup, 5-minute queue/overload alerts, nightly DB dump to `/var/backups/pixcherry/` |
+| Edge cache | Cloudflare Page Rule `app.pixcherry.com/api/e/*/pulse` → cache everything (origin sends `s-maxage=3`) |
+| Test data | Removed 2026-10-16 (events, photos, purchases, logs, test users). Backup before cleanup: `Diagnose\pixcherry-backups\` |
+| Admins | shukryradzi@gmail.com, tech.pixcherry@gmail.com (email-code login) |
 
-## 2. R2 bucket settings
+## Still to do (Shukry)
 
-CORS (R2 → bucket → Settings → CORS policy), so phones can PUT directly:
+1. **CHIP live keys** — replace the TEST brand ID + secret in the server `.env` (`PLATFORM_CHIP_BRAND_ID`, `PLATFORM_CHIP_SECRET_KEY`), then one real payment end to end and refund it.
+2. **Off-site DB backups** — today the nightly dump stays on the same server. Create an R2 bucket `pixcherry-backups` and an API token for that bucket only (R2 → Manage API tokens), save it in `Diagnose\pixcherry-r2-backups.txt`; Claude then configures rclone for `deploy/backup.sh`.
+3. **Supabase Data API** — the app never uses it. Supabase → Project Settings → Data API → turn it off (or at least rotate the `service_role` key). Keys are in `Diagnose\pixcherry-dev-details.txt`.
+4. **Root password** — SSH no longer accepts passwords, so the old root password only works in the Vultr web console. Change it there if it was ever shared.
+5. **support@pixcherry.com** — the site and FAQ point people there; make sure the mailbox (or forward) exists.
+6. **Real photos for the landing page** — the current demo photos are AI-generated; swap in real event photos when you have permission to use them (re-run the showcase, see README).
+7. Real-phone check at a test event: an iPhone (HEIC) and an Android on 4G.
+8. Terms + Privacy wording review.
 
-```json
-[
-  {
-    "AllowedOrigins": ["https://pixcherry.com"],
-    "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["content-type"],
-    "MaxAgeSeconds": 3600
-  }
-]
+## When to upgrade the server
+
+Upgrade to Vultr 2 vCPU / 4 GB (~RM105/month) after ~10 paying Premium events, or as soon as the queue-alert email arrives during an event. Then set `WORKER_CONCURRENCY=2` and raise `COMFORT_GUESTS` / `BUSY_GUESTS` in `lib/capacity.ts`.
+
+## Making the explainer video MP4
+
+Playwright records WebM. The MP4 (for older iPhones) is made with ffmpeg, trimming the warm-up (`start` in `chapters.json`):
+
+```bash
+ffmpeg -ss <start> -i docs/screens/demo/video/guest.webm -vf "scale=720:-2" -c:v libx264 -profile:v main -crf 26 -preset slow -pix_fmt yuv420p -movflags +faststart -an docs/screens/demo/video/guest.mp4
 ```
-
-Lifecycle rules (backstop if the hourly cron ever stops):
-- prefix `ev/` → delete after **400 days** (longer than the longest package's retention; raise if a package keeps photos longer)
-- prefix `ev/` with `/in/` incoming uploads are cleaned by the app; no rule needed.
-
-## 3. Server (Claude, with approval for each risky step)
-
-1. `~/.ssh/id_ed25519_pixcherry` + alias `pixcherry` in `~/.ssh/config`.
-2. Before first reboot: `touch /etc/cloud/cloud-init.disabled` (Ubuntu 26.04 hang).
-3. `ssh pixcherry 'bash -s' < deploy/setup-server.sh`
-4. Write `/home/pixcherry/app/.env` (from `.env.example`, mode 600, owner pixcherry).
-5. Cloudflare Origin CA cert → `/etc/caddy/certs/origin.pem|key`; SSL mode Full (strict).
-6. Firewall: 80/443 from Cloudflare IPs only, SSH key-only (hardening playbook).
-7. `DATABASE_URL=<prod> node scripts/db.mjs migrate`
-8. `node scripts/deploy.mjs`
-9. Log in with an `ADMIN_EMAILS` address → Admin → Packages / Settings: set real prices and company details.
-
-## 4. Before taking real money
-
-- One real CHIP payment end to end, then refund it manually.
-- Upload from a real iPhone (HEIC) and Android on 4G at a test event.
-- Check `/admin` shows "Last cleanup" within the hour (cron running).
-- Terms + Privacy reviewed (template wording now).

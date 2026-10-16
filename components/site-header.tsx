@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/auth";
 const NAV = [
   { href: "/#how", label: "How it works" },
   { href: "/#features", label: "Features" },
+  { href: "/guide", label: "Guide" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
 ];
@@ -80,6 +81,9 @@ export function SiteFooter() {
           </Link>
           <Link href="/#features" className="hover:text-white">
             Features
+          </Link>
+          <Link href="/guide" className="hover:text-white">
+            Guide
           </Link>
           <Link href="/#pricing" className="hover:text-white">
             Pricing

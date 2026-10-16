@@ -133,18 +133,27 @@ export async function listPeople(eventId: string, limit = 200): Promise<Person[]
   return rows.map((r) => ({ id: r.id, name: r.name, count: r.count, hearts: r.hearts, cover: r.avatar_key ? publicUrl(r.avatar_key) : r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).sm) : null }));
 }
 
-export type TagAlbum = { tag: string; count: number; cover: string | null };
+export type TagAlbum = { tag: string; count: number; cover: string | null; covers?: string[] };
 
 /** One "album" per hashtag, biggest first, with the most loved photo as cover. */
 export async function listTagAlbums(eventId: string): Promise<TagAlbum[]> {
-  const rows = await q<{ tag: string; count: number; cover_id: string }>(
-    `select t.tag, count(*)::int as count, (array_agg(p.id order by p.vote_count desc, p.ready_at desc))[1] as cover_id
+  const rows = await q<{ tag: string; count: number; cover_ids: string[] }>(
+    `select t.tag, count(*)::int as count, (array_agg(p.id order by p.vote_count desc, p.ready_at desc))[1:8] as cover_ids
      from photos p cross join lateral unnest(p.tags) as t(tag)
      where p.event_id = $1 and p.status = 'ready'
      group by t.tag order by count(*) desc, t.tag limit 40`,
     [eventId],
   );
-  return rows.map((r) => ({ tag: r.tag, count: r.count, cover: r.cover_id ? publicUrl(photoKeys(eventId, r.cover_id).md) : null }));
+  // A photo with several hashtags would be every album's cover: give each album its
+  // best photo that no bigger album has taken yet.
+  const used = new Set<string>();
+  return rows.map((r) => {
+    const id = r.cover_ids.find((c) => !used.has(c)) ?? r.cover_ids[0];
+    if (id) used.add(id);
+    const md = (p: string) => publicUrl(photoKeys(eventId, p).md);
+    // `covers`: other good candidates, so the page can avoid a cover another tile already shows.
+    return { tag: r.tag, count: r.count, cover: id ? md(id) : null, covers: r.cover_ids.slice(0, 4).map(md) };
+  });
 }
 
 export type Stats = {
