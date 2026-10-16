@@ -347,6 +347,8 @@ export function GuestApp(p: Props) {
       setJoined({ id: g.id, name: g.name, uploaded: g.uploaded, blocked: false, avatar: g.avatar ?? null });
       if (g.avatar) setPeopleKey((k) => k + 1);
       if (g.key) setKey(g.key);
+      // Their own join in the counts (album numbers are cached for 3 s on the server).
+      setTimeout(loadStats, 3500);
       const next = joinFor;
       setJoinFor(null);
       if (!next || next.kind === "join") return;
@@ -360,7 +362,7 @@ export function GuestApp(p: Props) {
         flash("You're in! Tap Upload to pick your photos 📸");
       }
     },
-    [joinFor, f.camera, flash],
+    [joinFor, f.camera, flash, loadStats],
   );
 
   const vote = useCallback(

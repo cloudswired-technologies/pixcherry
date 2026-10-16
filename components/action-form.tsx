@@ -13,7 +13,6 @@ export function ActionForm({
   pending = "Saving…",
   variant = "primary",
   className,
-  encType,
   fullWidth,
 }: {
   action: (s: State, fd: FormData) => Promise<State>;
@@ -22,12 +21,11 @@ export function ActionForm({
   pending?: string;
   variant?: BtnVariant;
   className?: string;
-  encType?: "multipart/form-data";
   fullWidth?: boolean;
 }) {
   const [state, run, busy] = useActionState(action, {});
   return (
-    <form action={run} className={cn("grid gap-4", className)} encType={encType}>
+    <form action={run} className={cn("grid gap-4", className)}>
       {children}
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       {state.ok ? <Notice tone="ok">{state.ok}</Notice> : null}

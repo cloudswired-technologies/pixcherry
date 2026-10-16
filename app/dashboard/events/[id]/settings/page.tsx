@@ -244,7 +244,6 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
               action={uploadCover.bind(null, e.id)}
               submit="Upload cover"
               pending="Uploading…"
-              encType="multipart/form-data"
             >
               <input
                 type="file"
@@ -275,7 +274,6 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
                 action={uploadLogo.bind(null, e.id)}
                 submit="Upload logo"
                 pending="Uploading…"
-                encType="multipart/form-data"
               >
                 <input
                   type="file"

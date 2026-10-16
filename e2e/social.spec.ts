@@ -316,7 +316,7 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   await sql("update guests set is_blocked = true where event_id = $1 and name = 'Aminah'", [ev.id]);
   const a2 = await onPhone(5555, AMINAH);
   await joinAs(a2.pg, "Not Aminah");
-  await expect(a2.pg.getByText("The hosts turned off uploads from this phone.")).toBeVisible();
+  await expect(a2.pg.getByText("The hosts turned off sharing from this phone. You can still look at the album.")).toBeVisible();
   await sql("update guests set is_blocked = false where event_id = $1 and name = 'Aminah'", [ev.id]);
   for (const c of [b1.ctx, b2.ctx, b3.ctx, a1.ctx, a2.ctx, r1.ctx, r2.ctx, r3.ctx, ...venue]) await c.close();
 

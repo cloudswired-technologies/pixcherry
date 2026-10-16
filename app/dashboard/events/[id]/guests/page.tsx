@@ -52,13 +52,13 @@ export default async function Guests({ params, searchParams }: { params: Promise
           <ul className="grid gap-2">
             {flagged.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-card p-3 text-sm">
-                <span className="min-w-0 flex-1">
-                  <strong>{g.name ?? "Guest"}</strong> ({g.photos} photos) looks like <strong>{g.same_phone_name ?? "Guest"}</strong>
+                <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+                  <strong>{g.name ?? "Guest"}</strong> ({g.photos} {g.photos === 1 ? "photo" : "photos"}) looks like <strong>{g.same_phone_name ?? "Guest"}</strong>
                 </span>
                 <Confirm
                   action={mergeGuestsNow.bind(null, e.id, g.id, g.same_phone_as!)}
                   title={`Merge into ${g.same_phone_name ?? "Guest"}?`}
-                  message={`${g.name ?? "This guest"}'s photos, wishes and comments move to ${g.same_phone_name ?? "the first guest"}, and they share one roll of shots.`}
+                  message={`${g.name ?? "This guest"}'s photos and wishes move to ${g.same_phone_name ?? "the first guest"}, and they share one roll of shots.`}
                   confirm="Merge"
                   danger={false}
                   className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3 text-xs font-bold text-white"
@@ -126,7 +126,7 @@ export default async function Guests({ params, searchParams }: { params: Promise
                 <Confirm
                   action={blockGuest.bind(null, e.id, g.id, !g.is_blocked)}
                   title={g.is_blocked ? `Let ${g.name ?? "this guest"} upload again?` : `Block ${g.name ?? "this guest"}?`}
-                  message={g.is_blocked ? "They can share photos, wishes and comments again." : "They can still look at the album, but can't share photos, wishes or comments from this phone. Their photos stay."}
+                  message={g.is_blocked ? "They can share photos and wishes again." : "They can still look at the album, but can't share photos or wishes from this phone. Their photos stay."}
                   confirm={g.is_blocked ? "Unblock" : "Block"}
                   danger={!g.is_blocked}
                   className="inline-flex h-8 items-center gap-1 rounded-full bg-muted px-3 text-xs font-semibold"

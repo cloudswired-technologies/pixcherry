@@ -31,7 +31,7 @@ export async function join(slug: string, _: JoinState, fd: FormData): Promise<Jo
   // "same" = "" (not asked yet) | "yes:<guest id>" | "new".
   const same = String(fd.get("same") ?? "");
   const { match: found, similar } = await findSamePhone(e.id, device);
-  if (found?.blocked) return { error: "The hosts turned off uploads from this phone." };
+  if (found?.blocked) return { error: "The hosts turned off sharing from this phone. You can still look at the album." };
   const match = found ? { id: found.id, name: found.name, photos: found.photos, strict: e.one_phone_one_roll } : null;
   if (match && !same) return { match }; // the bot-check token is only spent on the final submit
   if (match?.strict && same !== `yes:${match.id}`) return { match, error: "This phone already has a roll in this album." };
