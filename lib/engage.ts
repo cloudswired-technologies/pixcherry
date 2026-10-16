@@ -29,15 +29,20 @@ export async function missionsDoneBy(guestId: string) {
   ).map((r) => r.mission_id);
 }
 
-export const MISSION_PRESETS: { emoji: string; title: string }[] = [
-  { emoji: "🤳", title: "Selfie with the couple" },
-  { emoji: "👗", title: "Best dressed guest" },
-  { emoji: "👨‍👩‍👧", title: "Family group photo" },
-  { emoji: "👶", title: "The cutest little guest" },
+/** Mission ideas that fit any event (birthdays, launches, reunions, weddings…), added one tap at a time. */
+export const MISSION_IDEAS: { emoji: string; title: string }[] = [
+  { emoji: "🤳", title: "Selfie with the host" },
+  { emoji: "👥", title: "Big group photo" },
   { emoji: "😂", title: "A big candid laugh" },
-  { emoji: "🍛", title: "The food you loved" },
-  { emoji: "💐", title: "Decor details" },
-  { emoji: "💃", title: "Best dance move" },
+  { emoji: "👗", title: "Best outfit" },
+  { emoji: "🍽️", title: "The food you loved" },
+  { emoji: "✨", title: "Decor details" },
+  { emoji: "🤝", title: "Someone you just met" },
+  { emoji: "🎉", title: "The best moment" },
+  { emoji: "👶", title: "The youngest guest" },
+  { emoji: "📸", title: "Behind the scenes" },
+  { emoji: "🌅", title: "The view" },
+  { emoji: "🙌", title: "Everyone cheering" },
 ];
 
 // ------------------------------------------------------------------ wishes

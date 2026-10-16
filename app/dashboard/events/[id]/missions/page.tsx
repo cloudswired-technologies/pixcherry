@@ -6,9 +6,9 @@ import { Confirm } from "@/components/confirm";
 import { EmojiPicker } from "@/components/emoji-picker";
 import { Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { listMissions, missionBoard } from "@/lib/engage";
+import { MISSION_IDEAS, listMissions, missionBoard } from "@/lib/engage";
 import { getManagedEvent } from "@/lib/events";
-import { addMission, addPresetMissions, deleteMission, moveMission } from "../../actions";
+import { addMission, addMissionIdea, deleteMission, moveMission } from "../../actions";
 
 export const metadata = { title: "Missions" };
 
@@ -42,13 +42,6 @@ export default async function Missions({ params }: { params: Promise<{ id: strin
       <PageHeader
         title="Missions"
         sub="Make it a game: guests tick off photo challenges and race to become Mission Master."
-        actions={
-          <form action={addPresetMissions.bind(null, e.id)}>
-            <button className="inline-flex h-10 items-center gap-1.5 rounded-full bg-brand-soft px-4 text-sm font-semibold text-brand-strong">
-              <Sparkles className="size-4" aria-hidden /> Add the wedding pack
-            </button>
-          </form>
-        }
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -104,7 +97,7 @@ export default async function Missions({ params }: { params: Promise<{ id: strin
               })}
             </ol>
           ) : (
-            <p className="text-sm text-muted-foreground">No missions yet. Add your own, or start with the wedding pack.</p>
+            <p className="text-sm text-muted-foreground">No missions yet. Write your own below, or tap an idea.</p>
           )}
           <ActionForm action={addMission.bind(null, e.id)} submit="Add mission" pending="Adding…">
             <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
@@ -116,6 +109,27 @@ export default async function Missions({ params }: { params: Promise<{ id: strin
               </Field>
             </div>
           </ActionForm>
+          {MISSION_IDEAS.some((i) => !missions.some((m) => m.title === i.title)) ? (
+            <div className="grid gap-2 border-t border-border pt-4">
+              <div className="flex items-center gap-1.5 text-sm font-semibold">
+                <Sparkles className="size-4 text-brand" aria-hidden /> Ideas — tap to add
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {MISSION_IDEAS.map((idea, i) =>
+                  missions.some((m) => m.title === idea.title) ? null : (
+                    <form key={idea.title} action={addMissionIdea.bind(null, e.id, i)}>
+                      <button
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dashed border-border bg-card px-3 text-sm font-medium hover:border-brand hover:bg-brand-soft/40"
+                        aria-label={`Add idea: ${idea.title}`}
+                      >
+                        <span>{idea.emoji}</span> {idea.title}
+                      </button>
+                    </form>
+                  ),
+                )}
+              </div>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="grid content-start gap-3 bg-gradient-to-br from-[#fff4e0] to-brand-soft">

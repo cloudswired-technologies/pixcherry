@@ -114,13 +114,28 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
   const cover = coverUrl(e);
   const perMission = new Map(board?.missions.map((m) => [m.id, m.total]) ?? []);
   const qrSvg = await QRCode.toString(url, { type: "svg", margin: 1, color: { dark: "#1f2937", light: "#ffffff" } });
+  // Everything this package can do, as a checklist: done by itself where we can
+  // tell, otherwise ticked the first time the host opens it ("tried").
+  const ended = phase === "ended";
   const steps = [
     { key: "details", title: "Add a cover photo and venue", text: "Makes the album feel like yours.", href: `${base}/settings`, done: !!e.cover_key || !!e.venue },
     ...(f.missions
-      ? [{ key: "missions", title: "Add snap missions", text: "Fun photo challenges — one tap adds a ready-made pack.", href: `${base}/missions`, done: missions.length > 0 }]
+      ? [{ key: "missions", title: "Add snap missions", text: "Fun photo challenges — write your own or tap a ready idea.", href: `${base}/missions`, done: missions.length > 0 }]
+      : []),
+    ...(f.tags
+      ? [{ key: "tags", title: "Choose hashtags", text: "Each hashtag becomes an album guests can browse (#family, #food…).", href: `${base}/settings`, done: (e.suggested_tags?.length ?? 0) > 0 }]
       : []),
     { key: "try", title: "Try the guest app yourself", text: "Scan the QR with your phone and snap the first photo.", href: url, done: e.photo_count > 0, external: true },
     { key: "share", title: "Download the QR card and share it", text: "Print it for the tables or send it on WhatsApp.", href: `${base}/qr`, done: stats.joined > 1 },
+    ...(f.slideshow
+      ? [{ key: "slideshow", title: "Show the live slideshow on a TV", text: "New photos, wishes and the leaderboard pop up on the big screen.", href: `${url}/slideshow`, done: false, external: true, tried: true }]
+      : []),
+    ...(f.moderation
+      ? [{ key: "approval", title: "Decide on photo approval", text: "Want to check photos before guests see them? Turn it on in Settings.", href: `${base}/settings`, done: e.require_approval, tried: true }]
+      : []),
+    ...(f.wishes ? [{ key: "wishes", title: "Read the wishes", text: "Guests leave you messages — hide any you don't want on the wall.", href: `${base}/wishes`, done: false, tried: true }] : []),
+    { key: "download", title: "Download every photo", text: ended ? "Your album is ready — get the ZIP before it's deleted." : "After the event, download the whole album as one ZIP.", href: `/api/e/${e.slug}/album`, done: false, tried: true, external: true },
+    { key: "recap", title: "Share the recap", text: "A beautiful page of the day in numbers, best photos and wishes.", href: `${url}/recap`, done: false, tried: true, external: true },
   ];
 
   return (
@@ -145,8 +160,13 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
           </div>
           {!e.purged_at ? (
             <div className="flex flex-wrap gap-2">
-              <a href={url} target="_blank" rel="noreferrer" className={btn("brand", "sm")}>
-                <Camera aria-hidden /> Open guest app
+              {e.photo_count > 0 ? (
+                <a href={`/api/e/${e.slug}/album`} className={btn("brand", "sm")}>
+                  <Download aria-hidden /> Download all photos
+                </a>
+              ) : null}
+              <a href={`/api/events/${e.id}/card?format=pdf`} className={btn("outline", "sm", "border-white/20 bg-white/10 text-white hover:bg-white/20")}>
+                <QrCode aria-hidden /> QR card (PDF)
               </a>
               {f.slideshow ? (
                 <a href={`${url}/slideshow`} target="_blank" rel="noreferrer" className={btn("outline", "sm", "border-white/20 bg-white/10 text-white hover:bg-white/20")}>
@@ -281,9 +301,9 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
             <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
               No missions yet.{" "}
               <Link href={`${base}/missions`} className="font-semibold text-brand underline">
-                Add the wedding pack
-              </Link>{" "}
-              in one tap.
+                Add your first mission
+              </Link>
+              .
             </p>
           )}
         </Card>
@@ -295,11 +315,6 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-bold">Latest photos</h2>
             <div className="flex gap-2">
-              {e.photo_count > 0 && !e.purged_at ? (
-                <a href={`/api/e/${e.slug}/album`} className={btn("primary", "sm")}>
-                  <Download aria-hidden /> Download album
-                </a>
-              ) : null}
               <LinkButton href={`${base}/photos`} variant="outline" size="sm">
                 Manage
               </LinkButton>

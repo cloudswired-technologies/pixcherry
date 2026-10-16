@@ -62,8 +62,10 @@ test("screens", async ({ browser }) => {
   const [ev] = await sql("select slug from events where id = $1", [id]);
 
   await d.goto(`/dashboard/events/${id}/engage`);
-  await d.getByRole("button", { name: "Add the wedding pack" }).click();
-  await expect(d.getByText("Selfie with the couple")).toBeVisible();
+  for (const idea of ["Selfie with the host", "Big group photo", "A big candid laugh"]) {
+    await d.getByRole("button", { name: `Add idea: ${idea}` }).click();
+    await expect(d.getByRole("button", { name: `Add idea: ${idea}` })).toHaveCount(0);
+  }
   await d.screenshot({ path: `${OUT}/organiser-engage.png`, fullPage: true });
 
   const imagesLoaded = (p: typeof d) => p.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15_000 }).catch(() => {});
@@ -86,7 +88,7 @@ test("screens", async ({ browser }) => {
   const phone2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, permissions: ["camera"] });
   const g2 = await phone2.newPage();
   await g2.goto(`/e/${ev.slug}`);
-  await g2.getByRole("button", { name: /Selfie with the couple/ }).first().click();
+  await g2.getByRole("button", { name: /Selfie with the host/ }).first().click();
   await g2.getByLabel("Your name").fill("Amir");
   await g2.getByRole("button", { name: /Let's go/ }).click();
   const cam = g2.getByRole("dialog", { name: "Camera" });
@@ -117,7 +119,7 @@ test("screens", async ({ browser }) => {
   }
 
   await g.reload();
-  await expect(g.getByText("1/8")).toHaveCount(0); // Siti did no missions
+  await expect(g.getByText("1/3")).toHaveCount(0); // Siti did no missions
   await imagesLoaded(g);
   await g.screenshot({ path: `${OUT}/guest-home.png` });
   await g.screenshot({ path: `${OUT}/guest-gallery.png`, fullPage: true });

@@ -92,8 +92,10 @@ test("A to Z on a phone", async ({ browser }) => {
   await shot(o, "admin-event");
   const [ev] = await sql("select slug from events where id = $1", [id]);
   await o.goto(`/dashboard/events/${id}/engage`);
-  await o.getByRole("button", { name: "Add the wedding pack" }).click();
-  await expect(o.getByText("Selfie with the couple")).toBeVisible();
+  for (const idea of ["Selfie with the host", "Big group photo", "A big candid laugh"]) {
+    await o.getByRole("button", { name: `Add idea: ${idea}` }).click();
+    await expect(o.getByRole("button", { name: `Add idea: ${idea}` })).toHaveCount(0);
+  }
   await shot(o, "organiser-missions");
   await o.goto(`/dashboard/events/${id}/settings`);
   await o.getByLabel("Thank-you message (optional)").fill("Thank you for every smile and every photo. Love, Aina & Hakim");
@@ -134,7 +136,7 @@ test("A to Z on a phone", async ({ browser }) => {
   const g2c = await browser.newContext({ ...PHONE, permissions: ["camera"] });
   const g2 = await g2c.newPage();
   await g2.goto(`/e/${ev.slug}`);
-  await g2.getByRole("button", { name: /Selfie with the couple/ }).first().click();
+  await g2.getByRole("button", { name: /Selfie with the host/ }).first().click();
   await g2.getByLabel("Your name").fill("Amir");
   await g2.getByRole("button", { name: /Let's go/ }).click();
   // Snap = the PixCamera (fake webcam in tests): looks, zoom, review with hashtags + caption.

@@ -8,7 +8,7 @@ import { one, q, tx } from "@/lib/db";
 import { getManagedEvent, refreshDeletion, slugFromName, slugTaken, uniqueSlug } from "@/lib/events";
 import { slugProblem } from "@/lib/slug";
 import { parseLocalDateTime } from "@/lib/format";
-import { MISSION_PRESETS, setWishHidden } from "@/lib/engage";
+import { MISSION_IDEAS, setWishHidden } from "@/lib/engage";
 import { cleanTags } from "@/lib/tags";
 import { approvePhotos, deletePhoto } from "@/lib/photos";
 import { PaymentError, startPurchase, type PurchaseKind } from "@/lib/payments";
@@ -274,15 +274,17 @@ export async function addMission(id: string, _: FormState, fd: FormData): Promis
   return { ok: "Mission added." };
 }
 
-export async function addPresetMissions(id: string) {
+/** Adds one of the ready ideas (by its index in MISSION_IDEAS), unless it's already there. */
+export async function addMissionIdea(id: string, index: number) {
   const { e } = await managed(id);
-  if (!e.cfg.features.missions) return;
-  const existing = new Set((await q<{ title: string }>("select title from event_missions where event_id = $1", [e.id])).map((r) => r.title));
-  let sort = (await one<{ max: number }>("select coalesce(max(sort), 0)::int as max from event_missions where event_id = $1", [e.id]))?.max ?? 0;
-  for (const m of MISSION_PRESETS) {
-    if (existing.has(m.title)) continue;
-    await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, m.title, m.emoji, ++sort]);
-  }
+  const idea = MISSION_IDEAS[index];
+  if (!e.cfg.features.missions || !idea) return;
+  const n = await one<{ n: number; max: number; has: boolean }>(
+    "select count(*)::int as n, coalesce(max(sort), 0)::int as max, bool_or(title = $2) as has from event_missions where event_id = $1",
+    [e.id, idea.title],
+  );
+  if (n?.has || (n?.n ?? 0) >= 30) return;
+  await q("insert into event_missions (event_id, title, emoji, sort) values ($1, $2, $3, $4)", [e.id, idea.title, idea.emoji, (n?.max ?? 0) + 1]);
   revalidatePath(`/dashboard/events/${e.id}`, "layout");
 }
 

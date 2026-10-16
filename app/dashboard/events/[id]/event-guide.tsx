@@ -9,9 +9,33 @@ import { cn } from "@/components/ui";
 // guest app (where photos are taken), and the few steps to a great album, each
 // ticked off automatically. Folds away once everything is done or when closed.
 
-export type GuideStep = { key: string; title: string; text: string; href: string; done: boolean; external?: boolean };
+/** `tried`: we can't see it from the data, so it's ticked once the host opens it. */
+export type GuideStep = { key: string; title: string; text: string; href: string; done: boolean; external?: boolean; tried?: boolean };
 
-export function EventGuide({ eventId, guestUrl, qrSvg, steps }: { eventId: string; guestUrl: string; qrSvg: string; steps: GuideStep[] }) {
+export function EventGuide({ eventId, guestUrl, qrSvg, steps: raw }: { eventId: string; guestUrl: string; qrSvg: string; steps: GuideStep[] }) {
+  const triedKey = `pc-tried-${eventId}`;
+  const [tried, setTried] = useState<string[]>([]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        setTried(JSON.parse(localStorage.getItem(triedKey) ?? "[]"));
+      } catch {
+        /* storage blocked */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, [triedKey]);
+  const markTried = (key: string) => {
+    if (tried.includes(key)) return;
+    const next = [...tried, key];
+    setTried(next);
+    try {
+      localStorage.setItem(triedKey, JSON.stringify(next));
+    } catch {
+      /* storage blocked */
+    }
+  };
+  const steps = raw.map((s) => ({ ...s, done: s.done || (!!s.tried && tried.includes(s.key)) }));
   const done = steps.filter((s) => s.done).length;
   const all = done === steps.length;
   const storeKey = `pc-guide-${eventId}`;
@@ -72,7 +96,7 @@ export function EventGuide({ eventId, guestUrl, qrSvg, steps }: { eventId: strin
                 </div>
               </div>
             </div>
-            <ol className="grid gap-2">
+            <ol className="grid gap-2 sm:grid-cols-2">
               {steps.map((s, i) => {
                 const inner = (
                   <>
@@ -90,11 +114,11 @@ export function EventGuide({ eventId, guestUrl, qrSvg, steps }: { eventId: strin
                 return (
                   <li key={s.key}>
                     {s.external ? (
-                      <a href={s.href} target="_blank" rel="noreferrer" className={cls}>
+                      <a href={s.href} target="_blank" rel="noreferrer" className={cls} onClick={() => s.tried && markTried(s.key)}>
                         {inner}
                       </a>
                     ) : (
-                      <Link href={s.href} className={cls}>
+                      <Link href={s.href} className={cls} onClick={() => s.tried && markTried(s.key)}>
                         {inner}
                       </Link>
                     )}

@@ -15,13 +15,13 @@ function safe(s: string) {
   return s.normalize("NFKD").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "guest";
 }
 
-async function* files(e: Pick<EventRow, "id">) {
+async function* files(e: Pick<EventRow, "id">, ids?: string[]) {
   // Wishes first, as a text file the hosts can keep.
   const wishes: { name: string | null; message: string; created_at: Date }[] = await q(
     "select name, message, created_at from wishes where event_id = $1 and not is_hidden order by created_at",
     [e.id],
   );
-  if (wishes.length) {
+  if (!ids && wishes.length) {
     const text = wishes
       .map((w) => `${w.name ?? "A guest"} (${new Date(w.created_at).toISOString().slice(0, 16).replace("T", " ")} UTC)\n${w.message}\n`)
       .join("\n");
@@ -35,9 +35,10 @@ async function* files(e: Pick<EventRow, "id">) {
   for (;;) {
     const rows: { id: string; ready_at: Date; name: string | null; guest_id: string | null; caption: string | null }[] = await q(
       `select p.id, p.ready_at, g.name, p.guest_id, p.caption from photos p left join guests g on g.id = p.guest_id
-       where p.event_id = $1 and p.status = 'ready' ${cursor ? "and (p.ready_at, p.id) > ($2, $3)" : ""}
+       where p.event_id = $1 and p.status = 'ready' and ($2::uuid[] is null or p.id = any($2::uuid[]))
+         ${cursor ? "and (p.ready_at, p.id) > ($3, $4)" : ""}
        order by p.ready_at, p.id limit 200`,
-      cursor ? [e.id, cursor.at, cursor.id] : [e.id],
+      cursor ? [e.id, ids ?? null, cursor.at, cursor.id] : [e.id, ids ?? null],
     );
     if (!rows.length) break;
     for (const r of rows) {
@@ -57,7 +58,8 @@ async function* files(e: Pick<EventRow, "id">) {
   if (captions.length) yield { input: new TextEncoder().encode(captions.join("\n") + "\n"), name: "captions.txt", lastModified: new Date() };
 }
 
-export function albumResponse(e: Pick<EventRow, "id" | "name">) {
+/** Whole album, or only the photos in `ids` (organiser's selection). */
+export function albumResponse(e: Pick<EventRow, "id" | "name">, ids?: string[]) {
   if (running >= MAX_PARALLEL) {
     return new Response("Many albums are downloading right now. Please try again in a minute.", { status: 429, headers: { "retry-after": "60" } });
   }
@@ -69,7 +71,7 @@ export function albumResponse(e: Pick<EventRow, "id" | "name">) {
       running--;
     }
   };
-  const zip = makeZip(files(e));
+  const zip = makeZip(files(e, ids));
   const reader = zip.getReader();
   const body = new ReadableStream<Uint8Array>({
     async pull(ctrl) {
@@ -89,7 +91,7 @@ export function albumResponse(e: Pick<EventRow, "id" | "name">) {
       return reader.cancel(reason);
     },
   });
-  const filename = `${safe(e.name)}-photos.zip`;
+  const filename = `${safe(e.name)}-${ids ? `${ids.length}-photos` : "photos"}.zip`;
   return new Response(body, {
     headers: {
       "content-type": "application/zip",

@@ -9,7 +9,8 @@ import { ZoomableImage, type ZoomHandle } from "@/components/zoomable";
 import { approve, removePhoto } from "../../actions";
 
 // Organiser photo grid. A photo opens in a lightbox on the same page (zoom in
-// place, previous/next, details, download, delete) instead of a new tab.
+// place, previous/next, details, download, delete) instead of a new tab. Tick
+// photos (or select all) to download just those as one ZIP.
 
 export type GridPhoto = {
   id: string;
@@ -28,15 +29,51 @@ export type GridPhoto = {
 
 export function PhotoGrid({ eventId, slug, photos }: { eventId: string; slug: string; photos: GridPhoto[] }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const at = open ? photos.findIndex((p) => p.id === open) : -1;
+  const all = photos.length > 0 && photos.every((p) => picked.has(p.id));
+  const toggle = (id: string) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   return (
     <>
+      <div className="sticky top-14 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card/95 px-3 py-2 shadow-soft backdrop-blur lg:top-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" checked={all} onChange={() => setPicked(all ? new Set() : new Set(photos.map((p) => p.id)))} className="size-5 accent-brand" />
+          Select all on this page
+        </label>
+        <span className="text-sm text-muted-foreground">{picked.size ? `${picked.size} selected` : "or tick photos to download just those"}</span>
+        <span className="flex-1" />
+        {picked.size ? (
+          <>
+            <button type="button" onClick={() => setPicked(new Set())} className="inline-flex h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted">
+              Clear
+            </button>
+            <form action={`/api/events/${eventId}/zip`} method="post">
+              <input type="hidden" name="ids" value={[...picked].join(",")} />
+              <button className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand px-4 text-sm font-bold text-white shadow-cherry">
+                <Download className="size-4" aria-hidden /> Download {picked.size} selected
+              </button>
+            </form>
+          </>
+        ) : null}
+        <a href={`/api/e/${slug}/album`} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-4 text-sm font-semibold hover:bg-muted">
+          <Download className="size-4" aria-hidden /> Whole album
+        </a>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         {photos.map((p) => (
-          <div key={p.id} className={cn("overflow-hidden rounded-2xl border bg-card shadow-soft", p.review ? "border-warn" : "border-border")}>
+          <div key={p.id} className={cn("relative overflow-hidden rounded-2xl border bg-card shadow-soft", picked.has(p.id) ? "border-brand ring-2 ring-brand" : p.review ? "border-warn" : "border-border")}>
+            <label className="absolute left-2 top-2 z-10 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow-soft" title="Select">
+              <input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p.id)} className="size-4 accent-brand" aria-label={`Select photo${p.name ? ` by ${p.name}` : ""}`} />
+            </label>
             <button type="button" onClick={() => setOpen(p.id)} className="relative block w-full" aria-label={`Open photo${p.name ? ` by ${p.name}` : ""}`}>
               <img src={p.sm} alt={p.name ? `Photo by ${p.name}` : "Event photo"} loading="lazy" className="aspect-square w-full bg-muted object-cover transition-transform hover:scale-[1.02]" />
-              {p.emoji ? <span className="absolute left-2 top-2 rounded-full bg-white/90 px-1.5 text-sm">{p.emoji}</span> : null}
+              {p.emoji ? <span className="absolute left-12 top-2 rounded-full bg-white/90 px-1.5 text-sm">{p.emoji}</span> : null}
               {p.review ? <span className="absolute right-2 top-2 rounded-full bg-warn px-2 py-0.5 text-[11px] font-bold text-white">To approve</span> : null}
               {p.votes ? (
                 <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">

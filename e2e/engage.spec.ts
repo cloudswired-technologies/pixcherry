@@ -43,27 +43,29 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("Login code").fill("123456");
   await page.getByRole("button", { name: "Log in" }).click();
-  await page.getByRole("button", { name: "Add the wedding pack" }).click();
-  await expect(page.getByText("Selfie with the couple")).toBeVisible();
+  for (const idea of ["Selfie with the host", "Big group photo", "A big candid laugh"]) {
+    await page.getByRole("button", { name: `Add idea: ${idea}` }).click();
+    await expect(page.getByRole("button", { name: `Add idea: ${idea}` })).toHaveCount(0);
+  }
   const missions = await sql("select id, title from event_missions where event_id = $1 order by sort", [ev.id]);
-  expect(missions).toHaveLength(8);
+  expect(missions).toHaveLength(3);
 
   // Guest on a phone.
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ["camera"] });
   const g = await ctx.newPage();
   await g.goto(`/e/${slug}`);
   await expect(g.getByRole("heading", { name: "🎯 Snap missions" })).toBeVisible();
-  await expect(g.getByText("0/8")).toBeVisible();
+  await expect(g.getByText("0/3")).toBeVisible();
 
   // Tap a mission -> join -> the PixCamera opens on that mission (fake webcam in tests):
   // look, zoom, shutter, review with caption, share.
-  await g.getByRole("button", { name: /Selfie with the couple/ }).first().click();
+  await g.getByRole("button", { name: /Selfie with the host/ }).first().click();
   await g.getByLabel("Your name").fill("Amir");
   await g.getByRole("button", { name: /Let's go/ }).click();
   const cam = g.getByRole("dialog", { name: "Camera" });
   await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 15_000 });
   await expect(cam.locator('[aria-live="polite"]')).toContainText("20");
-  await expect(cam.getByRole("button", { name: /Selfie with the couple/ })).toHaveClass(/bg-brand/); // the mission tapped
+  await expect(cam.getByRole("button", { name: /Selfie with the host/ })).toHaveClass(/bg-brand/); // the mission tapped
   await cam.getByRole("button", { name: "Noir" }).click();
   await cam.getByRole("button", { name: "Zoom 2×" }).click();
   await expect(cam.getByRole("button", { name: "Zoom 2×" })).toHaveText("2×");
@@ -81,7 +83,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
 
   // Upload done + worker -> mission ticked, photo in gallery, filter applied (Noir = greyscale).
   await g.getByRole("button", { name: "Highlights" }).click(); // sharing jumps to All Photos
-  await expect(g.getByText("1/8")).toBeVisible({ timeout: 60_000 });
+  await expect(g.getByText("1/3")).toBeVisible({ timeout: 60_000 });
   await g.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "All Photos" }).click();
   await expect(g.getByAltText("Photo by Amir")).toHaveCount(1, { timeout: 60_000 });
   const [shot] = await sql("select id, mission_id, width, height, caption from photos where event_id = $1 and status = 'ready'", [ev.id]);

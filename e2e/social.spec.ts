@@ -411,5 +411,16 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   const [cake] = await sql("select emoji from event_missions where event_id = $1 and title = 'Cake moment'", [ev.id]);
   expect(cake.emoji).toBe("🎂");
 
+  // ---------------------------------------------------------------- photos: tick two, download just those
+  await page.goto(`/dashboard/events/${ev.id}/photos`);
+  const boxes = page.getByRole("checkbox", { name: /Select photo/ });
+  await boxes.nth(0).check();
+  await boxes.nth(1).check();
+  await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
+  const [zipDl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download 2 selected" }).click()]);
+  expect(zipDl.suggestedFilename()).toMatch(/-2-photos\.zip$/);
+  await page.getByLabel("Select all on this page").check();
+  await expect(page.getByText(/^\d+ selected$/)).toBeVisible();
+
   for (const c of [c1, c2, c3, c4, c5, c6, c7, c8, c10]) await c.close();
 });
