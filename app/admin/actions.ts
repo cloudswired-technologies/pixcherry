@@ -42,10 +42,12 @@ export async function savePlan(id: string | null, _: AdminState, fd: FormData): 
   if (price === null) return { error: "Enter a valid price." };
   const limits: Record<string, number> = {};
   for (const l of LIMITS) {
+    if (l.derived) continue;
     const n = int(fd.get(`limit_${l.key}`));
     if (n === null || Number.isNaN(n) || n < l.min || n > l.max) return { error: `${l.label}: enter a whole number from ${l.min} to ${l.max}.` };
     limits[l.key] = n;
   }
+  limits.max_photos = limits.max_guests * limits.photos_per_guest;
   const features: Record<string, boolean> = {};
   for (const f of FEATURES) features[f.key] = fd.get(`feature_${f.key}`) === "on";
   const highlights = String(fd.get("highlights") ?? "").split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 10);

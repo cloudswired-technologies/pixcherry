@@ -119,7 +119,7 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
                 <span>This event</span>
               </div>
               <div className="divide-y divide-border">
-                {LIMITS.map((l) => {
+                {LIMITS.filter((l) => !l.derived).map((l) => {
                   const pkg = base[l.key] + (addons[l.key] ?? 0);
                   const custom = ov.limits?.[l.key];
                   return (

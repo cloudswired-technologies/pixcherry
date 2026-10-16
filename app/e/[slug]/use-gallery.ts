@@ -70,7 +70,8 @@ export function useGallery(slug: string, filter: GalleryFilter, initial?: { phot
   }, [slug, key]);
 
   useEffect(() => {
-    const t = setInterval(poll, 15_000);
+    // The album pulse triggers a refresh as soon as a photo lands; this is only a safety net.
+    const t = setInterval(poll, 60_000);
     const vis = () => !document.hidden && poll();
     document.addEventListener("visibilitychange", vis);
     return () => {

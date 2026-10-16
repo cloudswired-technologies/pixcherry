@@ -65,7 +65,7 @@ export default async function PlanEdit({ params, searchParams }: { params: Promi
 
             <h3 className="mt-4 border-t border-border pt-5 text-lg font-bold">Limits</h3>
             <div className="grid gap-4 sm:grid-cols-2">
-              {LIMITS.map((l) => (
+              {LIMITS.filter((l) => !l.derived).map((l) => (
                 <Field key={l.key} label={`${l.label} (${l.unit})`} htmlFor={`limit_${l.key}`} help={l.help}>
                   <Input id={`limit_${l.key}`} name={`limit_${l.key}`} type="number" min={l.min} max={l.max} required defaultValue={limits[l.key]} />
                 </Field>

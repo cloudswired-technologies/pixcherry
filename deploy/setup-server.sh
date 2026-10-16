@@ -58,6 +58,7 @@ cat > /etc/cron.d/pixcherry <<'CRON'
 SHELL=/bin/bash
 5 * * * * root curl -fsS -m 600 -X POST -H "Authorization: Bearer $(grep -E '^CRON_SECRET=' /home/pixcherry/app/.env | cut -d= -f2-)" http://127.0.0.1:3000/api/cron/hourly >> /var/log/pixcherry-cron.log 2>&1
 0 19 * * * root bash /home/pixcherry/app/current/deploy/backup.sh >> /var/log/pixcherry-backup.log 2>&1
+*/5 * * * * root curl -fsS -m 30 -X POST -H "Authorization: Bearer $(grep -E '^CRON_SECRET=' /home/pixcherry/app/.env | cut -d= -f2-)" http://127.0.0.1:3000/api/cron/queue > /dev/null 2>&1
 CRON
 chmod 644 /etc/cron.d/pixcherry
 echo "setup ok"

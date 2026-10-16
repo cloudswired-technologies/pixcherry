@@ -22,9 +22,10 @@ export type FeatureKey =
   | "missions"
   | "tags";
 
-export const LIMITS: { key: LimitKey; label: string; help: string; min: number; max: number; fallback: number; unit: string; pricing?: (n: number) => string }[] = [
+/** `derived`: worked out from other limits, not typed in by the admin. */
+export const LIMITS: { key: LimitKey; label: string; help: string; min: number; max: number; fallback: number; unit: string; pricing?: (n: number) => string; derived?: boolean }[] = [
   { key: "photos_per_guest", label: "Photos per guest", help: "How many photos one guest (one phone) can upload.", min: 1, max: 10000, fallback: 20, unit: "photos", pricing: (n) => `${n.toLocaleString("en-MY")} photos per guest` },
-  { key: "max_photos", label: "Photos per event", help: "Total photos the whole event can hold.", min: 10, max: 1000000, fallback: 2000, unit: "photos", pricing: (n) => `Up to ${n.toLocaleString("en-MY")} photos` },
+  { key: "max_photos", label: "Photos per event", help: "Automatic: guests × photos per guest.", min: 10, max: 10000000, fallback: 2000, unit: "photos", pricing: (n) => `Up to ${n.toLocaleString("en-MY")} photos`, derived: true },
   { key: "max_guests", label: "Guests per event", help: "How many phones can join and upload.", min: 1, max: 100000, fallback: 200, unit: "guests", pricing: (n) => `Up to ${n.toLocaleString("en-MY")} guests` },
   { key: "max_file_mb", label: "Max file size", help: "Largest single photo accepted (after the phone resizes it).", min: 1, max: 100, fallback: 15, unit: "MB" },
   { key: "retention_days", label: "Storage after the event", help: "Days the photos stay online after the event ends. Then they are deleted.", min: 1, max: 3650, fallback: 7, unit: "days", pricing: (n) => `Photos kept ${n} days after the event` },
@@ -47,10 +48,9 @@ export const FEATURES: { key: FeatureKey; label: string; help: string; pricing: 
 export type Limits = Record<LimitKey, number>;
 export type Features = Record<FeatureKey, boolean>;
 
-export const ADDON_KINDS: { kind: "retention_days" | "photos_per_guest" | "max_photos" | "max_guests"; label: string }[] = [
+export const ADDON_KINDS: { kind: "retention_days" | "photos_per_guest" | "max_guests"; label: string }[] = [
   { kind: "retention_days", label: "Extra storage days" },
   { kind: "photos_per_guest", label: "Extra photos per guest" },
-  { kind: "max_photos", label: "Extra photos per event" },
   { kind: "max_guests", label: "Extra guests" },
 ];
 

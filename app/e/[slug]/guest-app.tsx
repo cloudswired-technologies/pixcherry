@@ -196,7 +196,7 @@ export function GuestApp(p: Props) {
   }, [p.slug, flash]);
   useEffect(() => {
     const first = setTimeout(loadStats, 0);
-    const t = setInterval(() => !document.hidden && loadStats(), 20_000);
+    const t = setInterval(() => !document.hidden && loadStats(), 45_000);
     return () => {
       clearTimeout(first);
       clearInterval(t);
@@ -260,7 +260,7 @@ export function GuestApp(p: Props) {
       }
     };
     const first = setTimeout(tick, 1000);
-    const t = setInterval(tick, 5000);
+    const t = setInterval(tick, 6000);
     return () => {
       clearTimeout(first);
       clearInterval(t);

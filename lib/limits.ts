@@ -53,6 +53,11 @@ export function eventConfig(e: EventConfigInput): EventConfig {
   // Add-ons may push past the registry max on purpose; only clamp the floor.
   const limits = {} as Limits;
   for (const l of LIMITS) limits[l.key] = Math.max(l.min, Math.round(Number(merged[l.key])));
+  // The whole album holds every guest's full roll (plus any old "+photos" add-on),
+  // unless an admin set a number for this event.
+  if (ov.limits?.max_photos === undefined || ov.limits?.max_photos === null) {
+    limits.max_photos = limits.max_guests * limits.photos_per_guest + Number((addons as Record<string, number>).max_photos ?? 0);
+  }
   const features = normaliseFeatures({ ...normaliseFeatures(snap?.features), ...(ov.features ?? {}) });
   const quality = ov.quality ?? snap?.quality ?? DEFAULT_QUALITY;
   return { limits, features, quality };
