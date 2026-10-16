@@ -11,7 +11,7 @@ Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com
 | Server hardening | SSH key-only (`/etc/ssh/sshd_config.d/00-pixcherry-hardening.conf`), fail2ban on SSH, UFW: 80/443 from Cloudflare only, port 3000 closed from outside |
 | Database | Supabase SG, migrations up to 0013; REST roles locked out of every table |
 | R2 | Bucket `pixcherry-photos`, CORS for PUT, lifecycle `ev/` 400 days |
-| Cron | hourly cleanup, 5-minute queue/overload alerts, nightly DB dump to `/var/backups/pixcherry/` |
+| Cron | hourly cleanup, 5-minute queue/overload alerts, nightly DB dump to `/var/backups/pixcherry/` (30 days) **and R2 `pixcherry-backups/db/`** (rclone remote `r2`, set up 2026-10-14; restore-tested 2026-10-16) |
 | Edge cache | Cloudflare Page Rule `app.pixcherry.com/api/e/*/pulse` → cache everything (origin sends `s-maxage=3`) |
 | Test data | Removed 2026-10-16 (events, photos, purchases, logs, test users). Backup before cleanup: `Diagnose\pixcherry-backups\` |
 | Admins | shukryradzi@gmail.com, tech.pixcherry@gmail.com (email-code login) |
@@ -19,13 +19,12 @@ Updated 2026-10-16 after the pre-launch audit. The site is live at pixcherry.com
 ## Still to do (Shukry)
 
 1. **CHIP live keys** — replace the TEST brand ID + secret in the server `.env` (`PLATFORM_CHIP_BRAND_ID`, `PLATFORM_CHIP_SECRET_KEY`), then one real payment end to end and refund it.
-2. **Off-site DB backups** — today the nightly dump stays on the same server. Create an R2 bucket `pixcherry-backups` and an API token for that bucket only (R2 → Manage API tokens), save it in `Diagnose\pixcherry-r2-backups.txt`; Claude then configures rclone for `deploy/backup.sh`.
-3. **Supabase Data API** — the app never uses it. Supabase → Project Settings → Data API → turn it off (or at least rotate the `service_role` key). Keys are in `Diagnose\pixcherry-dev-details.txt`.
-4. **Root password** — SSH no longer accepts passwords, so the old root password only works in the Vultr web console. Change it there if it was ever shared.
-5. **support@pixcherry.com** — the site and FAQ point people there; make sure the mailbox (or forward) exists.
-6. **Real photos for the landing page** — the current demo photos are AI-generated; swap in real event photos when you have permission to use them (re-run the showcase, see README).
-7. Real-phone check at a test event: an iPhone (HEIC) and an Android on 4G.
-8. Terms + Privacy wording review.
+2. **Supabase Data API** — the app never uses it. Supabase → Project Settings → Data API → turn it off (or at least rotate the `service_role` key). Keys are in `Diagnose\pixcherry-dev-details.txt`.
+3. **Root password** — SSH no longer accepts passwords, so the old root password only works in the Vultr web console. Change it there if it was ever shared.
+4. **support@pixcherry.com** — the site and FAQ point people there; make sure the mailbox (or forward) exists.
+5. **Real photos for the landing page** — the current demo photos are AI-generated; swap in real event photos when you have permission to use them (re-run the showcase, see README).
+6. Real-phone check at a test event: an iPhone (HEIC) and an Android on 4G.
+7. Terms + Privacy wording review.
 
 ## When to upgrade the server
 
