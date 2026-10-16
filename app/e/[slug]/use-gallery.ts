@@ -91,9 +91,15 @@ export function useGallery(slug: string, filter: GalleryFilter, initial?: { phot
     setPhotos((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)));
   }, []);
 
+  /** Drop a photo from this list (e.g. after the guest reported it). */
+  const removePhoto = useCallback((id: string) => {
+    setPhotos((list) => list.filter((x) => x.id !== id));
+  }, []);
+
   return {
     photos,
     next,
+    removePhoto,
     loading,
     more: () => {
       if (next && !loading) load(next, false);

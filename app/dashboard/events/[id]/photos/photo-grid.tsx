@@ -25,7 +25,19 @@ export type GridPhoto = {
   votes: number;
   emoji: string | null;
   review: boolean;
+  /** Why it needs a look: AI hid it, AI unsure, or guests reported it. */
+  flag: "ai" | "ai_soft" | "report" | null;
+  reports: number;
 };
+
+function badge(p: GridPhoto) {
+  if (p.review && p.flag === "ai") return { text: "Hidden by AI", cls: "bg-danger text-white" };
+  if (p.review && p.flag === "report") return { text: `Reported by ${p.reports} guests`, cls: "bg-danger text-white" };
+  if (p.review) return { text: "To approve", cls: "bg-warn text-white" };
+  if (p.flag === "ai_soft") return { text: "AI: check", cls: "bg-white text-warn ring-1 ring-warn" };
+  if (p.flag === "report" || p.reports) return { text: `Reported (${p.reports})`, cls: "bg-white text-warn ring-1 ring-warn" };
+  return null;
+}
 
 export function PhotoGrid({ eventId, slug, photos }: { eventId: string; slug: string; photos: GridPhoto[] }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -67,14 +79,14 @@ export function PhotoGrid({ eventId, slug, photos }: { eventId: string; slug: st
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         {photos.map((p) => (
-          <div key={p.id} className={cn("relative overflow-hidden rounded-2xl border bg-card shadow-soft", picked.has(p.id) ? "border-brand ring-2 ring-brand" : p.review ? "border-warn" : "border-border")}>
+          <div key={p.id} className={cn("relative overflow-hidden rounded-2xl border bg-card shadow-soft", picked.has(p.id) ? "border-brand ring-2 ring-brand" : p.review || p.flag ? "border-warn" : "border-border")}>
             <label className="absolute left-2 top-2 z-10 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow-soft" title="Select">
               <input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p.id)} className="size-4 accent-brand" aria-label={`Select photo${p.name ? ` by ${p.name}` : ""}`} />
             </label>
-            <button type="button" onClick={() => setOpen(p.id)} className="relative block w-full" aria-label={`Open photo${p.name ? ` by ${p.name}` : ""}`}>
-              <img src={p.sm} alt={p.name ? `Photo by ${p.name}` : "Event photo"} loading="lazy" className="aspect-square w-full bg-muted object-cover transition-transform hover:scale-[1.02]" />
+            <button type="button" onClick={() => setOpen(p.id)} className="relative block w-full overflow-hidden" aria-label={`Open photo${p.name ? ` by ${p.name}` : ""}`}>
+              <img src={p.sm} alt={p.name ? `Photo by ${p.name}` : "Event photo"} loading="lazy" className={cn("aspect-square w-full bg-muted object-cover transition-transform hover:scale-[1.02]", p.review && p.flag && "blur-lg")} />
               {p.emoji ? <span className="absolute left-12 top-2 rounded-full bg-white/90 px-1.5 text-sm">{p.emoji}</span> : null}
-              {p.review ? <span className="absolute right-2 top-2 rounded-full bg-warn px-2 py-0.5 text-[11px] font-bold text-white">To approve</span> : null}
+              {badge(p) ? <span className={cn("absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold", badge(p)!.cls)}>{badge(p)!.text}</span> : null}
               {p.votes ? (
                 <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                   <Heart className="size-3 fill-white" aria-hidden /> {p.votes}
@@ -111,9 +123,9 @@ export function PhotoGrid({ eventId, slug, photos }: { eventId: string; slug: st
 function Actions({ eventId, p, dark }: { eventId: string; p: GridPhoto; dark?: boolean }) {
   return (
     <div className="flex shrink-0 gap-1">
-      {p.review ? (
+      {p.review || p.flag ? (
         <form action={approve.bind(null, eventId, [p.id])}>
-          <button className="grid size-8 place-items-center rounded-full bg-ok-soft text-ok" aria-label="Approve photo">
+          <button className="grid size-8 place-items-center rounded-full bg-ok-soft text-ok" aria-label="Approve photo" title="Looks fine: show it in the album">
             <Check className="size-4" aria-hidden />
           </button>
         </form>

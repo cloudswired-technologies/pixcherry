@@ -42,7 +42,7 @@ cpSync(".next/static", join(stage, ".next/static"), { recursive: true });
 if (existsSync("public")) cpSync("public", join(stage, "public"), { recursive: true });
 cpSync("deploy", join(stage, "deploy"), { recursive: true });
 mkdirSync(join(stage, "worker"), { recursive: true });
-for (const f of ["worker.mjs", "storage.mjs", "package.json", "package-lock.json"]) cpSync(join("worker", f), join(stage, "worker", f));
+for (const f of ["worker.mjs", "storage.mjs", "moderate.mjs", "package.json", "package-lock.json"]) cpSync(join("worker", f), join(stage, "worker", f));
 // Never ship local secrets or dev data.
 for (const f of [".env", ".env.local", ".env.production", ".local-db", ".local-storage", "docs", "e2e", "test-results"]) rmSync(join(stage, f), { recursive: true, force: true });
 // Last line of defence: refuse to ship anything that looks like credentials or local data
@@ -91,7 +91,7 @@ if ! cmp -s $REL/worker/package-lock.json $W/package-lock.json || [ ! -d $W/node
   (cd $W && sudo -u pixcherry npm ci --omit=dev --no-audit --no-fund --loglevel=error) || { echo "worker npm ci failed"; exit 1; }
   W_CHANGED=1
 fi
-for f in worker.mjs storage.mjs; do
+for f in worker.mjs storage.mjs moderate.mjs; do
   cmp -s $REL/worker/$f $W/$f || { install -m 640 -o pixcherry -g pixcherry $REL/worker/$f $W/; W_CHANGED=1; }
 done
 for u in pixcherry pixcherry-worker; do

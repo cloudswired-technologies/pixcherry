@@ -978,6 +978,15 @@ export function GuestApp(p: Props) {
                 }
               : undefined
           }
+          onReport={
+            joined && !joined.blocked
+              ? (id) => {
+                  history.back();
+                  all.removePhoto(id);
+                  albumGallery.removePhoto(id);
+                }
+              : undefined
+          }
           onTag={(t) => {
             history.back();
             setTimeout(() => openTag(t), 0);

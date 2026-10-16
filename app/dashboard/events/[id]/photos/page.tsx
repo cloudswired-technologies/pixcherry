@@ -7,8 +7,9 @@ import { one, q } from "@/lib/db";
 import { getManagedEvent } from "@/lib/events";
 import { formatDateTime } from "@/lib/format";
 import { photoKeys, publicUrl } from "@/lib/storage";
+import { pendingReviewCount } from "@/lib/photos";
 import { approve } from "../../actions";
-import { PhotoGrid } from "./photo-grid";
+import { PhotoGrid, type GridPhoto } from "./photo-grid";
 
 export const metadata = { title: "Photos" };
 
@@ -41,9 +42,10 @@ export default async function Photos({ params, searchParams }: { params: Promise
   const order = { new: "p.ready_at desc nulls last", old: "p.ready_at asc", top: "p.vote_count desc, p.ready_at desc", captioned: "p.ready_at desc nulls last" }[sort];
   if (sort === "captioned") where += " and p.caption is not null";
 
-  const [rows, count, guestName, missions, tags] = await Promise.all([
-    q<{ id: string; status: string; ready_at: Date | null; guest_id: string | null; name: string | null; vote_count: number; caption: string | null; tags: string[]; emoji: string | null }>(
-      `select p.id, p.status, p.ready_at, p.guest_id, g.name, p.vote_count, p.caption, p.tags, m.emoji
+  const [rows, count, guestName, missions, tags, waiting] = await Promise.all([
+    q<{ id: string; status: string; ready_at: Date | null; guest_id: string | null; name: string | null; vote_count: number; caption: string | null; tags: string[]; emoji: string | null; flag: GridPhoto["flag"]; reports: number }>(
+      `select p.id, p.status, p.ready_at, p.guest_id, g.name, p.vote_count, p.caption, p.tags, m.emoji, p.flag,
+         case when p.approved_at is null then p.report_count else 0 end as reports
        from photos p left join guests g on g.id = p.guest_id left join event_missions m on m.id = p.mission_id
        where ${where} order by ${order}, p.id desc limit ${PAGE + 1} offset ${(page - 1) * PAGE}`,
       params2,
@@ -57,6 +59,7 @@ export default async function Photos({ params, searchParams }: { params: Promise
           [e.id],
         )
       : Promise.resolve([]),
+    pendingReviewCount(e.id),
   ]);
   const more = rows.length > PAGE;
   const list = rows.slice(0, PAGE);
@@ -95,9 +98,9 @@ export default async function Photos({ params, searchParams }: { params: Promise
               {SORTS[s]}
             </Link>
           ))}
-          {f.moderation ? (
+          {f.moderation || waiting > 0 || view === "review" ? (
             <Link href={link({ view: view === "review" ? undefined : "review", page: undefined })} className={pill(view === "review")}>
-              Waiting for approval
+              Waiting for approval{waiting ? <span className="rounded-full bg-warn px-1.5 text-xs text-white">{waiting}</span> : null}
             </Link>
           ) : null}
         </div>
@@ -122,9 +125,15 @@ export default async function Photos({ params, searchParams }: { params: Promise
         ) : null}
       </div>
 
+      {view === "review" ? (
+        <Notice>
+          🛡️ PixCherry checks every photo. Photos that look like nudity, and photos reported by 2 guests, are hidden here until you approve (✓) or delete them. The person who shared it still sees it.
+        </Notice>
+      ) : null}
+
       {f.moderation && !e.require_approval && view === "review" ? (
         <Notice>
-          Photo approval is off, so new photos show straight away. Turn it on in{" "}
+          Approving every photo is off, so all other photos show straight away. To check each one first, turn it on in{" "}
           <Link href={`/dashboard/events/${e.id}/settings`} className="font-semibold underline">
             Settings
           </Link>
@@ -153,6 +162,8 @@ export default async function Photos({ params, searchParams }: { params: Promise
               votes: p.vote_count,
               emoji: p.emoji,
               review: p.status === "review",
+              flag: p.flag,
+              reports: p.reports,
             };
           })}
         />

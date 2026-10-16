@@ -166,6 +166,8 @@ export async function listPhotos(eventId: string, opts: ListOptions) {
   let where = `p.event_id = $1 and (p.status = 'ready'${opts.includeReview ? " or p.status = 'review'" : ""}${
     viewer && !opts.includeReview ? ` or (p.status = 'review' and p.guest_id = ${viewerParam})` : ""
   })`;
+  // Photos this guest reported disappear for them straight away.
+  if (viewer) where += ` and not exists (select 1 from photo_reports r where r.photo_id = p.id and r.guest_id = ${viewerParam})`;
   if (opts.byGuest && UUID.test(opts.byGuest)) where += ` and p.guest_id = $${params.push(opts.byGuest)}::uuid`;
   if (opts.mission && UUID.test(opts.mission)) where += ` and p.mission_id = $${params.push(opts.mission)}::uuid`;
   if (opts.tag && /^[a-z0-9_]{2,24}$/.test(opts.tag)) where += ` and $${params.push(opts.tag)} = any(p.tags)`;
@@ -230,8 +232,32 @@ export async function deletePhoto(eventId: string, photoId: string) {
 
 export async function approvePhotos(eventId: string, ids: string[]) {
   if (!ids.length) return 0;
-  const r = await q("update photos set status = 'ready' where event_id = $1 and id = any($2::uuid[]) and status = 'review' returning id", [eventId, ids]);
+  const r = await q(
+    "update photos set status = 'ready', flag = null, approved_at = now() where event_id = $1 and id = any($2::uuid[]) and (status = 'review' or flag is not null) returning id",
+    [eventId, ids],
+  );
   return r.length;
+}
+
+// Guests needed to hide a photo for review. One isn't enough: a single prank
+// report shouldn't take someone's photo down.
+export const REPORTS_TO_HIDE = 2;
+
+/** A guest reports someone else's photo. Returns null if not allowed, else whether it is now hidden. */
+export async function reportPhoto(eventId: string, guestId: string, photoId: string) {
+  if (!UUID.test(photoId)) return null;
+  const p = await one<{ guest_id: string | null; status: string }>("select guest_id, status from photos where id = $1 and event_id = $2", [photoId, eventId]);
+  if (!p || p.guest_id === guestId || !["ready", "review"].includes(p.status)) return null;
+  const added = await q("insert into photo_reports (photo_id, guest_id) values ($1, $2) on conflict do nothing returning photo_id", [photoId, guestId]);
+  if (!added.length) return { hidden: p.status === "review" };
+  const r = await one<{ status: string }>(
+    `update photos set report_count = report_count + 1,
+       status = case when status = 'ready' and approved_at is null and report_count + 1 >= ${REPORTS_TO_HIDE} then 'review' else status end,
+       flag = case when status = 'ready' and approved_at is null and report_count + 1 >= ${REPORTS_TO_HIDE} then 'report' else flag end
+     where id = $1 returning status`,
+    [photoId],
+  );
+  return { hidden: r?.status === "review" };
 }
 
 export async function pendingReviewCount(eventId: string) {

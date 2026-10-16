@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, Download, Heart, Loader2, Pencil, Share2, ZoomIn, ZoomOut } from "lucide-react";
+import { Check, ChevronLeft, Download, Flag, Heart, Loader2, Pencil, Share2, ZoomIn, ZoomOut } from "lucide-react";
 import { ZoomableImage, type ZoomHandle } from "@/components/zoomable";
 import type { GalleryPhoto } from "@/lib/photos";
 import { initial } from "./panels";
@@ -22,8 +22,11 @@ export function Viewer({
   total,
   onTag,
   onCaption,
+  onReport,
 }: {
   onTag?: (tag: string) => void;
+  /** I reported someone else's photo: drop it from my gallery. Absent = can't report (not joined). */
+  onReport?: (photoId: string) => void;
   /** Caption saved for one of my photos: update the gallery. Absent = captions can't be edited here. */
   onCaption?: (photoId: string, caption: string | null) => void;
   slug: string;
@@ -47,12 +50,14 @@ export function Viewer({
   // Zoom happens in place (pinch, wheel or the magnifier); swiping waits until zoomed out.
   const [zoomed, setZoomed] = useState(false);
   const zoomer = useRef<ZoomHandle>(null);
+  // Reporting a photo: confirm sheet for this photo id.
+  const [report, setReport] = useState<{ id: string; busy?: boolean; error?: string } | null>(null);
   const editRef = useRef(false);
   const zoomRef = useRef(false);
   useEffect(() => {
-    editRef.current = edit !== null;
+    editRef.current = edit !== null || report !== null;
     zoomRef.current = zoomed;
-  }, [edit, zoomed]);
+  }, [edit, report, zoomed]);
   const go = (i: number) => {
     if (i < 0 || i >= photos.length) return;
     setDir(i > index ? 1 : -1);
@@ -79,7 +84,15 @@ export function Viewer({
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return zoomRef.current ? zoomer.current?.reset() : editRef.current ? setEdit(null) : history.back();
+      if (e.key === "Escape") {
+        if (zoomRef.current) return zoomer.current?.reset();
+        if (editRef.current) {
+          setEdit(null);
+          setReport(null);
+          return;
+        }
+        return history.back();
+      }
       if (editRef.current) return;
       if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
       if (e.key === "ArrowRight" && index < photos.length - 1) onIndex(index + 1);
@@ -109,6 +122,18 @@ export function Viewer({
       onCaption?.(edit.id, b.caption);
       setEdit(null);
     } else setEdit({ ...edit, busy: false });
+  };
+  const sendReport = async () => {
+    if (!report || report.busy) return;
+    setReport({ ...report, busy: true, error: undefined });
+    const r = await fetch(`/api/e/${slug}/photos/${report.id}/report`, { method: "POST" }).catch(() => null);
+    if (r?.ok) {
+      setReport(null);
+      onReport?.(report.id);
+    } else {
+      const b = (await r?.json().catch(() => null)) as { error?: string } | null;
+      setReport({ ...report, busy: false, error: b?.error ?? "Couldn't send. Check your connection." });
+    }
   };
   const share = async () => {
     const url = `${location.origin}/api/e/${slug}/photos/${ph.id}/download`;
@@ -253,8 +278,40 @@ export function Viewer({
           <button type="button" onClick={share} className="grid size-11 place-items-center rounded-full" aria-label="Share photo">
             <Share2 className="size-6" aria-hidden />
           </button>
+          {onReport && !ph.mine && ph.status === "ready" ? (
+            <button type="button" onClick={() => setReport({ id: ph.id })} className="grid size-11 place-items-center rounded-full text-white/70" aria-label="Report photo">
+              <Flag className="size-5" aria-hidden />
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {report ? (
+        <div className="absolute inset-0 z-10 flex items-end bg-black/60 sm:items-center sm:justify-center" onClick={() => !report.busy && setReport(null)}>
+          <div
+            role="alertdialog"
+            aria-label="Report this photo?"
+            className="w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-ink sm:max-w-sm sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <Flag className="size-5 text-danger" aria-hidden /> Report this photo?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Inappropriate or posted without permission? It disappears for you right away. If another guest reports it too, it&apos;s hidden until the host checks it.
+            </p>
+            {report.error ? <p className="mt-2 text-sm font-semibold text-danger">{report.error}</p> : null}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setReport(null)} disabled={report.busy} className="h-11 rounded-full border border-border font-semibold">
+                Cancel
+              </button>
+              <button type="button" onClick={sendReport} disabled={report.busy} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-danger font-semibold text-white disabled:opacity-60">
+                {report.busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null} Report
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

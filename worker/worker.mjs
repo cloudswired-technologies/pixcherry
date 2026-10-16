@@ -8,6 +8,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import pg from "pg";
 import sharp from "sharp";
+import { moderate, warmUp } from "./moderate.mjs";
 import { createStorage } from "./storage.mjs";
 
 if (existsSync(".env.local")) {
@@ -124,13 +125,17 @@ async function process1(job) {
   await storage.delete(k.incoming).catch(() => {});
 
   const bytes = full.data.length + md.length + sm.length;
+  // AI check on the small preview: nudity is hidden until the host decides.
+  const ai = await moderate(sm);
+  const review = s.review || ai?.flag === "ai";
   const client = await db.connect();
   try {
     await client.query("begin");
     const r = await client.query(
-      `update photos set status = $2, bytes = $3, width = $4, height = $5, ready_at = date_trunc('milliseconds', now()), locked_at = null, error = null
+      `update photos set status = $2, bytes = $3, width = $4, height = $5, ready_at = date_trunc('milliseconds', now()), locked_at = null, error = null,
+         flag = $6, nsfw = $7
        where id = $1 and status = 'processing' returning id`,
-      [job.id, s.review ? "review" : "ready", bytes, full.info.width, full.info.height],
+      [job.id, review ? "review" : "ready", bytes, full.info.width, full.info.height, ai?.flag ?? null, ai?.nsfw ?? null],
     );
     if (r.rowCount === 1) {
       await client.query("update events set photo_count = photo_count + 1, bytes_used = bytes_used + $2 where id = $1", [job.event_id, bytes]);
@@ -142,7 +147,7 @@ async function process1(job) {
   } finally {
     client.release();
   }
-  return s.review ? "review" : "ready";
+  return `${review ? "review" : "ready"}${ai?.flag ? ` (${ai.flag} ${ai.nsfw})` : ""}`;
 }
 
 async function fail(job, err, final) {
@@ -202,5 +207,6 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log(`pixcherry worker: ${CONCURRENCY} slot(s), storage=${storage.name}`);
+warmUp();
 await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => loop(i + 1)));
 await db.end();
