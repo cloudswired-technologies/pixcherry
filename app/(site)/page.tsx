@@ -86,7 +86,7 @@ export default async function Home() {
               Put one QR code on the table. Guests scan it, snap with their phone and share — no app, no sign-up. You end up with every photo from the day, in one place.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <LinkButton href="/dashboard/events/new" variant="brand" size="lg" className="shadow-cherry">
+              <LinkButton href="/dashboard/events/new" prefetch={false} variant="brand" size="lg" className="shadow-cherry">
                 Create your event <ArrowRight aria-hidden />
               </LinkButton>
               <LinkButton href="/#video" variant="outline" size="lg">
@@ -270,7 +270,7 @@ export default async function Home() {
                   key={p.id}
                   plan={p}
                   action={
-                    <LinkButton href={`/dashboard/events/new?plan=${p.code}`} variant={p.is_featured ? "brand" : "primary"} size="lg" className="w-full">
+                    <LinkButton href={`/dashboard/events/new?plan=${p.code} prefetch={false}`} variant={p.is_featured ? "brand" : "primary"} size="lg" className="w-full">
                       {p.price_cents === 0 ? "Start free" : `Choose ${p.name}`} <ArrowRight aria-hidden />
                     </LinkButton>
                   }
@@ -319,7 +319,7 @@ export default async function Home() {
               <div>
                 <h2 className="text-4xl font-extrabold tracking-tight">Your guests are already taking the photos</h2>
                 <p className="mt-3 max-w-lg text-white/75">Give them one place to put them. Set up your album now — it&apos;s ready the moment you pay.</p>
-                <LinkButton href="/dashboard/events/new" variant="brand" size="lg" className="mt-7">
+                <LinkButton href="/dashboard/events/new" prefetch={false} variant="brand" size="lg" className="mt-7">
                   Create your event <ArrowRight aria-hidden />
                 </LinkButton>
               </div>

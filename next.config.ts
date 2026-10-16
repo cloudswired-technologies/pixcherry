@@ -41,7 +41,17 @@ const nextConfig: NextConfig = {
   },
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // Images in public/ (landing screenshots, brand art, icons) aren't hashed, so Next
+    // sends max-age=0 and Cloudflare goes back to Singapore for every one — slow when a
+    // visitor is routed to a far-away Cloudflare site. Let browsers keep them a day and
+    // Cloudflare serve them from its cache, refreshing in the background.
+    const publicCache = [{ key: "Cache-Control", value: "public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800" }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: "/landing/:file*", headers: publicCache },
+      { source: "/brand/:file*", headers: publicCache },
+      { source: "/:icon(icon-192.png|icon-512.png|icon-maskable-512.png)", headers: publicCache },
+    ];
   },
   experimental: {
     serverActions: { bodySizeLimit: "12mb" }, // cover / logo uploads
