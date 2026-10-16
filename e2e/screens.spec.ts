@@ -60,6 +60,7 @@ test("screens", async ({ browser }) => {
   await d.getByRole("button", { name: "Activate" }).click();
   await expect(d.getByText("Event activated")).toBeVisible();
   const [ev] = await sql("select slug from events where id = $1", [id]);
+  await sql("update events set starts_at = now() - interval '1 hour', ends_at = now() + interval '5 hours' where id = $1", [id]);
 
   await d.goto(`/dashboard/events/${id}/engage`);
   for (const idea of ["Selfie with the host", "Big group photo", "A big candid laugh"]) {

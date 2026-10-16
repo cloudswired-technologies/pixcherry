@@ -33,7 +33,8 @@ const FAQ: [string, string][] = [
   ["Can I use it for a corporate event, a school event or a family day?", "Yes. Missions, hashtags and the slideshow work for any event — you choose your own wording."],
   ["Can guests still upload after the event?", "Yes, for a while: each package keeps uploads open for some hours after the event ends, so late photos still make it in."],
   ["How do I pay?", "Once per event, online through CHIP (FPX online banking or card). There's no subscription. The Free package costs nothing."],
-  ["Can I change the event details or the link later?", "Yes. If you change the link, old QR codes keep working and take guests to the new one."],
+  ["When can guests start sharing?", "From the event's start time. Before that, anyone who scans the QR code sees the event with a countdown, so they know the album is ready. You, the host, can preview it any time."],
+  ["Can I change the event details or the link later?", "Yes. The name, message, venue and link can change any time — old QR codes keep working and take guests to the new link. The date and time can change until the event starts; after that they're fixed."],
 ];
 
 function Feature({

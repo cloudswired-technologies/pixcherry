@@ -91,6 +91,8 @@ test("A to Z on a phone", async ({ browser }) => {
   await expect(o.getByRole("heading", { name: "Adjust this event" })).toBeVisible();
   await shot(o, "admin-event");
   const [ev] = await sql("select slug from events where id = $1", [id]);
+  // The album opens at the start time: make the event live for the guest part.
+  await sql("update events set starts_at = now() - interval '1 hour', ends_at = now() + interval '5 hours' where id = $1", [id]);
   await o.goto(`/dashboard/events/${id}/engage`);
   for (const idea of ["Selfie with the host", "Big group photo", "A big candid laugh"]) {
     await o.getByRole("button", { name: `Add idea: ${idea}` }).click();

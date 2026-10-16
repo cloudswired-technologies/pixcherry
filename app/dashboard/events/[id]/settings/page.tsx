@@ -15,7 +15,8 @@ import {
 } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { coverUrl, getManagedEvent, logoUrl } from "@/lib/events";
-import { toLocalInput } from "@/lib/format";
+import { formatDate, toLocalInput } from "@/lib/format";
+import { datesLocked } from "@/lib/limits";
 import {
   regenerateLink,
   updateEvent,
@@ -41,6 +42,7 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
   const user = await requireUser();
   const e = await getManagedEvent(id, user);
   if (!e) notFound();
+  const locked = datesLocked(e);
   if (e.purged_at)
     return (
       <Notice tone="warn">
@@ -92,6 +94,8 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
                   type="datetime-local"
                   required
                   defaultValue={toLocalInput(e.starts_at)}
+                  readOnly={locked}
+                  className={locked ? "bg-muted text-muted-foreground" : undefined}
                 />
               </Field>
               <Field
@@ -105,8 +109,15 @@ export default async function EventSettings({ params }: { params: Promise<{ id: 
                   type="datetime-local"
                   required
                   defaultValue={toLocalInput(e.ends_at)}
+                  readOnly={locked}
+                  className={locked ? "bg-muted text-muted-foreground" : undefined}
                 />
               </Field>
+              {locked ? (
+                <p className="text-xs text-muted-foreground sm:col-span-2">🔒 The dates are fixed now that the event has started. The album opened at the start time and photos are kept until {formatDate(e.deletion_at ?? e.ends_at)}.</p>
+              ) : e.paid_at ? (
+                <p className="text-xs text-muted-foreground sm:col-span-2">Guests can open the album from the start time. Before that they see a countdown. The dates can&apos;t be changed once the event starts.</p>
+              ) : null}
             </div>
             <Field
               label="Venue (optional)"

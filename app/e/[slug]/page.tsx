@@ -5,14 +5,15 @@ import { Logo } from "@/components/ui";
 import { eventStats, listMissions, listTagAlbums, missionsDoneBy } from "@/lib/engage";
 import { suggestedTags } from "@/lib/tags";
 import { coverUrl, getEventBySlug, guestPath, guestUrl, logoUrl, renamedSlug } from "@/lib/events";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { currentGuest, currentGuestKey } from "@/lib/guests";
 import { currentUser } from "@/lib/auth";
 import { APP_URL } from "@/lib/env";
-import { eventPhase, uploadsOpen } from "@/lib/limits";
+import { albumOpen, eventPhase, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
 import { publicUrl } from "@/lib/storage";
 import { turnstileSiteKey } from "@/lib/turnstile";
+import { Countdown } from "./countdown";
 import { GuestApp } from "./guest-app";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,21 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
   }
   const [guest, viewer] = await Promise.all([currentGuest(e.id), currentUser()]);
   // The host (or an admin) looking at their own album: offer the way back.
-  const hostUrl = viewer && (viewer.id === e.owner_id || viewer.is_admin) ? `${APP_URL}/dashboard/events/${e.id}` : null;
+  const isHost = !!viewer && (viewer.id === e.owner_id || viewer.is_admin);
+  const hostUrl = isHost ? `${APP_URL}/dashboard/events/${e.id}` : null;
+  // Before the start time guests get a countdown; the host can preview the album (no uploads).
+  if (!albumOpen(e) && !isHost) {
+    return (
+      <Countdown
+        name={e.name}
+        startsAt={new Date(e.starts_at).toISOString()}
+        when={formatDateTime(e.starts_at)}
+        venue={e.venue}
+        cover={coverUrl(e)}
+        accent={(e.cfg.features.custom_branding && e.accent_color) || "#e91d48"}
+      />
+    );
+  }
   const f = e.cfg.features;
   const share = guestUrl(e.slug);
   const [first, missions, done, stats, tagAlbums, key, qr] = await Promise.all([
@@ -75,6 +90,7 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       qrSvg={qr}
       resumeKey={key}
       hostUrl={hostUrl}
+      opensAt={albumOpen(e) ? null : formatDateTime(e.starts_at)}
       event={{
         name: e.name,
         description: e.description,

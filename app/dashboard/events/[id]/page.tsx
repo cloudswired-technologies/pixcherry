@@ -13,7 +13,7 @@ import { one, q } from "@/lib/db";
 import { eventStats, listMissions, listWishes, missionBoard } from "@/lib/engage";
 import { coverUrl, getManagedEvent, guestUrl } from "@/lib/events";
 import { formatBytes, formatDate, formatDateTime, formatMoney, formatRange } from "@/lib/format";
-import { deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
+import { albumOpen, deletionSoon, eventPhase, uploadsCloseAt, uploadsOpen } from "@/lib/limits";
 import { listPhotos } from "@/lib/photos";
 import { photoKeys, publicUrl } from "@/lib/storage";
 import { getSetting } from "@/lib/settings";
@@ -125,7 +125,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
     ...(f.tags
       ? [{ key: "tags", title: "Choose hashtags", text: "Each hashtag becomes an album guests can browse (#family, #food…).", href: `${base}/settings`, done: (e.suggested_tags?.length ?? 0) > 0 }]
       : []),
-    { key: "try", title: "Try the guest app yourself", text: "Scan the QR with your phone and snap the first photo.", href: url, done: e.photo_count > 0, external: true },
+    { key: "try", title: "Try the guest app yourself", text: albumOpen(e) ? "Scan the QR with your phone and snap the first photo." : "Scan the QR with your phone to preview what guests see. Guests get a countdown until the start time.", href: url, done: e.photo_count > 0, external: true },
     { key: "share", title: "Download the QR card and share it", text: "Print it for the tables or send it on WhatsApp.", href: `${base}/qr`, done: stats.joined > 1 },
     ...(f.slideshow
       ? [{ key: "slideshow", title: "Show the live slideshow on a TV", text: "New photos, wishes and the leaderboard pop up on the big screen.", href: `${url}/slideshow`, done: false, external: true, tried: true }]
@@ -150,7 +150,7 @@ export default async function EventOverview({ params }: { params: Promise<{ id: 
             <PhaseBadge phase={phase} />
             {!e.purged_at ? (
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${open ? "bg-white/15" : "bg-white/10 text-white/70"}`}>
-                <span className={`size-1.5 rounded-full ${open ? "bg-[#4ade80]" : "bg-white/50"}`} /> {open ? "Uploads open" : "Uploads closed"}
+                <span className={`size-1.5 rounded-full ${open ? "bg-[#4ade80]" : "bg-white/50"}`} /> {open ? "Uploads open" : e.paid_at && !albumOpen(e) ? `Opens ${formatDateTime(e.starts_at)}` : "Uploads closed"}
               </span>
             ) : null}
           </div>

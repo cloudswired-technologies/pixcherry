@@ -87,14 +87,29 @@ export function eventPhase(
   return "ended";
 }
 
+/** The album opens to guests at the event's start time (before that: a "opens on…" page). */
+export function albumOpen(e: { starts_at: Date }, now = new Date()) {
+  return now >= new Date(e.starts_at);
+}
+
+/**
+ * Guests can join and add photos from the start of the event until the package's
+ * upload window after it ends. Everything else (dates, retention) follows the same dates.
+ */
 export function uploadsOpen(
-  e: { paid_at: Date | null; purged_at: Date | null; ends_at: Date; deletion_at: Date | null; uploads_enabled: boolean },
+  e: { paid_at: Date | null; purged_at: Date | null; starts_at: Date; ends_at: Date; deletion_at: Date | null; uploads_enabled: boolean },
   cfg: EventConfig,
   now = new Date(),
 ) {
   if (!e.paid_at || e.purged_at || !e.uploads_enabled) return false;
+  if (!albumOpen(e, now)) return false;
   if (e.deletion_at && now >= e.deletion_at) return false;
   return now <= uploadsCloseAt(e.ends_at, cfg);
+}
+
+/** Dates are fixed once the event has started (so one payment covers one event, and retention can't be stretched). */
+export function datesLocked(e: { paid_at: Date | null; starts_at: Date }, now = new Date()) {
+  return !!e.paid_at && now >= new Date(e.starts_at);
 }
 
 /** True when the photos will be deleted within `warnDays`. */

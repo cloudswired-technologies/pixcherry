@@ -87,6 +87,8 @@ test("organiser → guest upload → gallery → downloads → admin → retenti
   const [ev] = await sql("select id, deletion_at, plan_snapshot->>'code' as plan from events where slug = $1", [slug]);
   expect(ev.plan).toBe("premium");
   expect(ev.deletion_at).toBeTruthy();
+  // The album opens at the start time (before that guests see a countdown): make the event live.
+  await sql("update events set starts_at = now() - interval '1 hour', ends_at = now() + interval '5 hours' where id = $1", [ev.id]);
 
   const qr = await page.request.get(`/api/events/${ev.id}/qr`);
   expect(qr.status()).toBe(200);

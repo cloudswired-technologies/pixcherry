@@ -8,6 +8,7 @@ import { one, q, tx } from "@/lib/db";
 import { getManagedEvent, refreshDeletion, slugFromName, slugTaken, uniqueSlug } from "@/lib/events";
 import { slugProblem } from "@/lib/slug";
 import { parseLocalDateTime } from "@/lib/format";
+import { datesLocked } from "@/lib/limits";
 import { MISSION_IDEAS, setWishHidden } from "@/lib/engage";
 import { cleanTags } from "@/lib/tags";
 import { approvePhotos, deletePhoto } from "@/lib/photos";
@@ -78,6 +79,15 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
   if (e.purged_at) return { error: "This event's photos were deleted; it can't be changed." };
   const d = readDetails(fd);
   if ("error" in d) return { error: d.error };
+  // Once a paid event has started its dates are fixed: one payment = one event, and the
+  // deletion date can't be pushed out by moving the event. Before that they can change,
+  // but not into the past.
+  const locked = datesLocked(e);
+  const starts = locked ? new Date(e.starts_at) : d.starts;
+  const ends = locked ? new Date(e.ends_at) : d.ends;
+  if (!locked && e.paid_at && starts.getTime() < Date.now() - 60_000) {
+    return { error: "The start can't be in the past. Choose the real start time of your event." };
+  }
   const branding = e.cfg.features.custom_branding;
   const accent = String(fd.get("accent_color") ?? "");
   const picked = fd.has("slug") ? await readSlug(fd, e.id) : { slug: null };
@@ -99,8 +109,8 @@ export async function updateEvent(id: string, _: FormState, fd: FormData): Promi
         e.id,
         d.name,
         d.description,
-        d.starts,
-        d.ends,
+        starts,
+        ends,
         fd.get("ask_guest_name") === "on",
         // "How guests add photos": both | camera | closed.
         fd.get("photo_mode") !== "closed",

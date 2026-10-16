@@ -63,7 +63,7 @@ test("links, captions, missions, top snappers, snap, install", async ({ browser,
   expect(ev).toBeTruthy();
   // Reserved words and taken links are refused live.
   await sql(
-    `update events e set paid_at = now(), deletion_at = now() + interval '9 days', plan_id = p.id,
+    `update events e set paid_at = now(), starts_at = now() - interval '1 hour', ends_at = now() + interval '5 hours', deletion_at = now() + interval '9 days', plan_id = p.id,
        plan_snapshot = jsonb_build_object('code', p.code, 'name', p.name, 'price_cents', p.price_cents, 'limits', p.limits,
          'features', p.features || '{"missions":true,"slideshow":true,"voting":true,"camera":true}'::jsonb,
          'quality', json_build_object('name', q.name, 'max_px', q.max_px, 'jpeg_quality', q.jpeg_quality))

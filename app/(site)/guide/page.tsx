@@ -16,7 +16,7 @@ const HOST: Step[] = [
     title: "Create your event",
     text: [
       "Log in with your email (we send a 6-digit code, no password to remember).",
-      "Type the event name, date and time, venue and a short message for guests. Pick a link people can read, like app.pixcherry.com/aina-hakim.",
+      "Type the event name, date and time, venue and a short message for guests. Pick a link people can read, like app.pixcherry.com/aina-hakim. Set the real start time: the album opens to guests then, and the dates are fixed once the event starts.",
     ],
     img: "/landing/guide-create.webp",
     alt: "Create event form with name, venue and message",
@@ -46,7 +46,7 @@ const HOST: Step[] = [
     title: "Share the QR code",
     text: [
       "Download the QR card as a PDF to print, or as an image to show on a screen or send in WhatsApp. It tells guests what to do in three short steps.",
-      "Put it on tables, at the entrance, or on the slideshow screen.",
+      "Put it on tables, at the entrance, or on the slideshow screen. Until the event starts, guests who scan it see a countdown; at the start time the album opens.",
     ],
     img: "/landing/guide-qr.webp",
     alt: "QR card with the event name and three steps",

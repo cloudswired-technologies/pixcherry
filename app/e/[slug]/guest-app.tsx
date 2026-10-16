@@ -79,6 +79,8 @@ type Props = {
   resumeKey: string | null;
   /** Set when the host is looking at their own album: link back to their dashboard. */
   hostUrl: string | null;
+  /** Host previewing before the start time: guests still see the countdown until then. */
+  opensAt?: string | null;
   event: {
     name: string;
     description: string;
@@ -485,7 +487,15 @@ export function GuestApp(p: Props) {
         <div className="bg-ink px-4 py-2 text-white">
           <div className="mx-auto flex max-w-3xl items-center gap-3 text-sm">
             <span className="min-w-0 flex-1">
-              <strong>Guest view.</strong> <span className="text-white/75">This is what your guests see — snap and upload here too.</span>
+              {p.opensAt ? (
+                <>
+                  <strong>Preview.</strong> <span className="text-white/75">Guests see a countdown until {p.opensAt}, then they can join and share photos.</span>
+                </>
+              ) : (
+                <>
+                  <strong>Guest view.</strong> <span className="text-white/75">This is what your guests see — snap and upload here too.</span>
+                </>
+              )}
             </span>
             <a href={p.hostUrl} className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-ink">
               Host dashboard
