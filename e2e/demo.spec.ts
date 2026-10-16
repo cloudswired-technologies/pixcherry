@@ -86,7 +86,7 @@ async function guest(browsers: Browser[], slug: string, camera?: number): Promis
   return { ctx, page };
 }
 
-async function join(page: Page, name: string, face: number) {
+async function joinAlbum(page: Page, name: string, face: number) {
   await expect(page.getByRole("dialog", { name: "Join the album" })).toBeVisible();
   await page.getByLabel("Your name").fill(name);
   await page.locator('input[capture="user"]').first().setInputFiles(await selfie(face));
@@ -160,7 +160,7 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   const siti = await guest(browsers, slug);
   await shot(siti.page, "guest-first-visit");
   await siti.page.getByRole("button", { name: "Upload" }).click();
-  await join(siti.page, "Siti", 21);
+  await joinAlbum(siti.page, "Siti", 21);
   await shot(siti.page, "guest-join");
   await siti.page.getByRole("button", { name: /Let's go/ }).click();
   await expect(siti.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible();
@@ -174,7 +174,7 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   // Amir: snaps with PixCamera (his camera sees the dance floor), mission + film look + caption.
   const amir = await guest(browsers, slug, 3);
   await amir.page.getByRole("button", { name: "Snap" }).click();
-  await join(amir.page, "Amir", 9);
+  await joinAlbum(amir.page, "Amir", 9);
   await amir.page.getByRole("button", { name: /Let's go/ }).click();
   const cam = amir.page.getByRole("dialog", { name: "Camera" });
   await expect(cam.getByRole("button", { name: "Take photo" })).toBeEnabled({ timeout: 20_000 });
@@ -207,7 +207,7 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   for (const [name, face, ns, t] of people) {
     const g = await guest(browsers, slug);
     await g.page.getByRole("button", { name: "Upload" }).click();
-    await join(g.page, name, face);
+    await joinAlbum(g.page, name, face);
     await g.page.getByRole("button", { name: /Let's go/ }).click();
     await expect(g.page.getByText(/You have\s*\d+\s*shots left/)).toBeVisible();
     await share(g.page, ns, t);
@@ -332,7 +332,7 @@ test("showcase: wedding album end to end with real photos", async ({ browser }) 
   ] as const) {
     const g = await guest(browsers, corp.slug);
     await g.page.getByRole("button", { name: "Upload" }).click();
-    await join(g.page, name, face);
+    await joinAlbum(g.page, name, face);
     await g.page.getByRole("button", { name: /Let's go/ }).click();
     await share(g.page, [...ns], t);
     pages[name] = g.page;
