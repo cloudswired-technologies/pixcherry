@@ -270,7 +270,7 @@ export default async function Home() {
                   key={p.id}
                   plan={p}
                   action={
-                    <LinkButton href={`/dashboard/events/new?plan=${p.code} prefetch={false}`} variant={p.is_featured ? "brand" : "primary"} size="lg" className="w-full">
+                    <LinkButton href={`/dashboard/events/new?plan=${p.code}`} prefetch={false} variant={p.is_featured ? "brand" : "primary"} size="lg" className="w-full">
                       {p.price_cents === 0 ? "Start free" : `Choose ${p.name}`} <ArrowRight aria-hidden />
                     </LinkButton>
                   }
