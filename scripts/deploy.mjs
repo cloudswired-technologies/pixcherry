@@ -18,6 +18,13 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit"
 const ssh = (script) => execFileSync("ssh", [HOST, "bash -s"], { input: script.replace(/\r/g, ""), stdio: ["pipe", "inherit", "inherit"] });
 
 if (!process.argv.includes("--no-build")) {
+  // The Turnstile site key is baked into the build. Without it the bot check is silently
+  // off on live (happened until 2026-10-17), so take it from the server's .env and stop if missing.
+  const siteKey =
+    process.env.DEPLOY_TURNSTILE_SITE_KEY ||
+    execFileSync("ssh", [HOST, "grep -E '^NEXT_PUBLIC_TURNSTILE_SITE_KEY=' /home/pixcherry/app/.env | cut -d= -f2-"], { encoding: "utf8" }).trim();
+  if (!/^[0-9a-zA-Z_-]{10,}$/.test(siteKey)) throw new Error("Turnstile site key not found in the server .env; refusing to build without the bot check");
+  process.env.DEPLOY_TURNSTILE_SITE_KEY = siteKey;
   console.log(`> building for ${APP_URL}`);
   rmSync(".next/cache", { recursive: true, force: true });
   run(process.platform === "win32" ? "npx.cmd" : "npx", ["next", "build"], {
