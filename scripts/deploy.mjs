@@ -45,6 +45,8 @@ mkdirSync(join(stage, "worker"), { recursive: true });
 for (const f of ["worker.mjs", "storage.mjs", "moderate.mjs", "package.json", "package-lock.json"]) cpSync(join("worker", f), join(stage, "worker", f));
 // Never ship local secrets or dev data.
 for (const f of [".env", ".env.local", ".env.production", ".local-db", ".local-storage", "docs", "e2e", "test-results"]) rmSync(join(stage, f), { recursive: true, force: true });
+// public/event/ holds raw source photos for making landing images and the video; never public.
+rmSync(join(stage, "public", "event"), { recursive: true, force: true });
 // Last line of defence: refuse to ship anything that looks like credentials or local data
 // (dev_details.txt once slipped into a release through Next's file tracing).
 const forbidden = [];
