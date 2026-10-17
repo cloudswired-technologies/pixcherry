@@ -145,6 +145,15 @@ export function GuestApp(p: Props) {
   const snap = useRef<HTMLInputElement>(null);
   const [mission, setMission] = useState<string | null>(null);
   const [joinFor, setJoinFor] = useState<Pending>(null);
+  // The bot check starts when the album opens, so the token is ready by the time a guest taps
+  // Join (it took several seconds on phones when it only started then). It refreshes itself
+  // before it expires; `check` remounts it after a token was spent on a failed try.
+  const [bot, setBot] = useState<{ token: string | null; tick: boolean }>({ token: null, tick: false });
+  const [check, setCheck] = useState(0);
+  const retryCheck = useCallback(() => {
+    setBot({ token: null, tick: false });
+    setCheck((c) => c + 1);
+  }, []);
   const [wishOpen, setWishOpen] = useState(false);
   const [wishKey, setWishKey] = useState(0);
   const [peopleKey, setPeopleKey] = useState(0);
@@ -1059,8 +1068,31 @@ export function GuestApp(p: Props) {
       {p.canUpload ? <Welcome slug={p.slug} eventName={p.event.name} missions={hasMissions} joined={!!joined} onJoin={() => setJoinFor({ kind: "join" })} /> : null}
       {/* After the viewer so joining shows on top of it. */}
       <Sheet open={!!joinFor} onClose={() => setJoinFor(null)} title="Join the album" top>
-        <JoinForm slug={p.slug} askName={p.event.askName} siteKey={p.siteKey} onJoined={onJoined} canUpload={p.canUpload} />
+        <JoinForm
+          slug={p.slug}
+          askName={p.event.askName}
+          siteKey={p.siteKey}
+          bot={bot}
+          onRetryCheck={retryCheck}
+          onJoined={onJoined}
+          onAvatar={(url) => {
+            setJoined((j) => (j ? { ...j, avatar: url } : j));
+            setPeopleKey((k) => k + 1);
+          }}
+          canUpload={p.canUpload}
+        />
       </Sheet>
+      {p.siteKey && p.canUpload && !joined ? (
+        // Invisible unless Cloudflare asks for a tick; then shown above the join sheet.
+        <div className={bot.tick && joinFor ? "fixed inset-x-4 top-4 z-[75] flex justify-center" : "pointer-events-none fixed -left-[9999px] top-0"}>
+          <Turnstile
+            key={check}
+            siteKey={p.siteKey}
+            onToken={(token) => setBot((b) => ({ token, tick: token ? false : b.tick }))}
+            onInteractive={() => setBot((b) => ({ ...b, tick: true }))}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1069,23 +1101,30 @@ function JoinForm({
   slug,
   askName,
   siteKey,
+  bot,
+  onRetryCheck,
   onJoined,
+  onAvatar,
   canUpload,
 }: {
   slug: string;
   askName: boolean;
   siteKey: string | null;
+  bot: { token: string | null; tick: boolean };
+  onRetryCheck: () => void;
   onJoined: (j: NonNullable<JoinState["joined"]> & { avatar?: string | null }) => void;
+  onAvatar: (url: string) => void;
   canUpload: boolean;
 }) {
   const [selfie, setSelfie] = useState<{ blob: Blob; url: string } | null>(null);
   // Controlled fields + a manual submit: a failed attempt (e.g. the bot check not
   // finished yet) must never wipe the name the guest already typed.
   const [name, setName] = useState("");
-  const [token, setToken] = useState<string | null>(null);
-  const [slow, setSlow] = useState(false);
-  const [tick, setTick] = useState(false);
-  const [widget, setWidget] = useState(0);
+  const { token, tick } = bot;
+  // A tap before the bot check is done is remembered and sent as soon as the token arrives.
+  const form = useRef<HTMLFormElement>(null);
+  const [queued, setQueued] = useState<{ by: HTMLElement | null; at: number } | null>(null);
+  const autoRetried = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<JoinState["match"] | null>(null);
   const [device, setDevice] = useState("");
@@ -1097,26 +1136,36 @@ function JoinForm({
     isPrivateWindow().then(setPriv);
   }, []);
   useEffect(() => {
-    if (!siteKey) return;
-    // If the check never finishes (blocked script), let them try anyway; the server decides.
-    const t = setTimeout(() => setSlow(true), 8000);
+    if (!queued) return;
+    const send = () => {
+      setQueued(null);
+      form.current?.requestSubmit(queued.by && form.current.contains(queued.by) ? queued.by : undefined);
+    };
+    if (token) return send();
+    // The check never finished (blocked script, very slow phone): send anyway, the server decides.
+    if (tick) return;
+    const t = setTimeout(send, Math.max(0, 15_000 - (Date.now() - queued.at)));
     return () => clearTimeout(t);
-  }, [siteKey, widget]);
+  }, [queued, token, tick]);
   if (!canUpload) return <p className="text-sm text-muted-foreground">This album is closed for new photos and wishes.</p>;
   if (priv) return <PrivateWindow />;
-  // Waiting for the bot check; if it asks for a tick, wait for that (never submit without it).
-  const waiting = !!siteKey && !token && (!slow || tick);
+  // Cloudflare wants a tick: nothing goes until it's done.
+  const needTick = !!siteKey && !token && tick;
+  const checking = !!queued;
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // The "Yes, that's me" / "No" buttons carry name="same".
-    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    const by = (e.nativeEvent as SubmitEvent).submitter;
     setError(null);
+    if (siteKey && !token && !queued) return setQueued({ by, at: Date.now() });
+    // The "Yes, that's me" / "No" buttons carry name="same".
+    const fd = new FormData(e.currentTarget, by);
     startBusy(async () => {
       const r = await join(slug, {}, fd);
       if (r.joined) {
-        // The selfie goes up once they're in (it needs the guest session).
-        const avatar = selfie ? await uploadSelfie(slug, selfie.blob) : null;
-        return onJoined({ ...r.joined, avatar });
+        // In straight away; the selfie goes up after (it needs the guest session).
+        onJoined({ ...r.joined, avatar: null });
+        if (selfie) void uploadSelfie(slug, selfie.blob).then((url) => url && onAvatar(url));
+        return;
       }
       if (r.nameTaken) {
         setMatch(null);
@@ -1124,18 +1173,20 @@ function JoinForm({
       }
       if (r.match && !r.error) return setMatch(r.match);
       if (r.match) setMatch(r.match);
-      setError(r.error ?? "Something went wrong. Please try again.");
       if (siteKey) {
         // Tokens are single use: get a fresh one for the next try.
-        setToken(null);
-        setSlow(false);
-        setTick(false);
-        setWidget((w) => w + 1);
+        onRetryCheck();
+        // A rejected token (expired, network blip): try once more by itself before showing an error.
+        if (r.error?.startsWith("Please complete the check") && !autoRetried.current) {
+          autoRetried.current = true;
+          return setQueued({ by, at: Date.now() });
+        }
       }
+      setError(r.error ?? "Something went wrong. Please try again.");
     });
   };
   return (
-    <form onSubmit={submit} className="grid gap-3">
+    <form ref={form} onSubmit={submit} className="grid gap-3">
       <p className="text-sm text-muted-foreground">One tap and you&apos;re in — no app, no password.</p>
       {askName ? (
         <div className="flex items-end gap-3">
@@ -1169,7 +1220,7 @@ function JoinForm({
           }}
         />
       ) : null}
-      {siteKey ? <Turnstile key={widget} siteKey={siteKey} onToken={setToken} onInteractive={() => setTick(true)} /> : null}
+      {token ? <input type="hidden" name="cf-turnstile-response" value={token} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
       <input type="hidden" name="device" value={device} />
       {match ? (
@@ -1185,22 +1236,22 @@ function JoinForm({
               {match.photos ? ` with ${match.photos} photo${match.photos === 1 ? "" : "s"}` : ""}. Is that you?
             </p>
           )}
-          <button name="same" value={`yes:${match.id}`} disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-white shadow-cherry disabled:opacity-60">
+          <button name="same" value={`yes:${match.id}`} disabled={busy || checking || needTick} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-white shadow-cherry disabled:opacity-60">
             {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
             {match.strict ? "Continue" : "Yes, continue"} as {match.name ?? "that guest"}
           </button>
           {match.strict ? (
             <p className="text-xs text-muted-foreground">Not you? Switch to mobile data and try again, or ask the hosts.</p>
           ) : (
-            <button name="same" value="new" disabled={busy || waiting} className="py-1.5 text-sm font-semibold text-muted-foreground">
+            <button name="same" value="new" disabled={busy || checking || needTick} className="py-1.5 text-sm font-semibold text-muted-foreground">
               No, I&apos;m someone else
             </button>
           )}
         </div>
       ) : (
-        <button disabled={busy || waiting} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
-          {busy || waiting ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
-          {waiting ? (tick ? "Tick the box above first" : "Just a moment…") : "Let's go 🎉"}
+        <button disabled={busy || checking || needTick} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
+          {busy || checking ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
+          {needTick ? "Tick the box at the top first" : busy || checking ? "Joining…" : "Let's go 🎉"}
         </button>
       )}
     </form>
