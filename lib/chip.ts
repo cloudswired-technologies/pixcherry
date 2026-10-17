@@ -65,6 +65,8 @@ export function createPurchase(
         currency: "MYR",
         products: [{ name: input.productName.slice(0, 256), price: input.amountCents }],
       },
+      // FPX only (personal and corporate online banking), no cards: the owner's choice (2026-10-18).
+      payment_method_whitelist: ["fpx", "fpx_b2b1"],
       success_redirect: input.successRedirect,
       failure_redirect: input.failureRedirect,
       cancel_redirect: input.cancelRedirect,
