@@ -82,6 +82,8 @@ type Props = {
   hostUrl: string | null;
   /** Host previewing before the start time: guests still see the countdown until then. */
   opensAt?: string | null;
+  /** A demo album (pixcherry.com/demo): what visitors add clears after `hours`. */
+  demo?: { hours: number; page: string } | null;
   event: {
     name: string;
     description: string;
@@ -512,6 +514,18 @@ export function GuestApp(p: Props) {
           </div>
         </div>
       ) : null}
+      {p.demo ? (
+        <div className="bg-brand px-4 py-2 text-white">
+          <div className="mx-auto flex max-w-3xl items-center gap-3 text-sm">
+            <span className="min-w-0 flex-1 leading-snug">
+              <strong>Live demo.</strong> <span className="text-white/85">Snap here, see it on a 2nd phone. Clears after {p.demo.hours} h.</span>
+            </span>
+            <button type="button" onClick={() => setSheet("qr")} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand">
+              <QrCode className="size-3.5" aria-hidden /> 2nd phone
+            </button>
+          </div>
+        </div>
+      ) : null}
       {/* ------------------------------------------------------------ top bar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
@@ -824,7 +838,16 @@ export function GuestApp(p: Props) {
             <div className="font-bold">{p.event.name}</div>
             <div className="text-sm font-semibold text-brand">{p.shareUrl.replace(/^https?:\/\//, "")}</div>
           </div>
-          <p className="text-sm text-muted-foreground">Show this to friends so they can join and share their photos too.</p>
+          {p.demo ? (
+            <>
+              <p className="text-sm text-muted-foreground">Scan this with a second phone. Snap a photo on one phone and watch it appear on the other within seconds.</p>
+              <a href={p.demo.page} className="text-sm font-semibold text-brand underline-offset-4 hover:underline">
+                Try another demo event
+              </a>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Show this to friends so they can join and share their photos too.</p>
+          )}
         </div>
       </Sheet>
 

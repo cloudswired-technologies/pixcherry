@@ -38,6 +38,8 @@ export type EventRow = {
   photo_count: number;
   guest_count: number;
   bytes_used: string; // bigint
+  is_demo: boolean;
+  demo_key: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -109,8 +111,9 @@ export async function uniqueSlug(db?: Queryable) {
 /** Re-computes deletion_at from dates + effective limits. Call after anything that changes them. */
 export async function refreshDeletion(eventId: string, db: Queryable) {
   const e = await getEventById(eventId, db);
-  if (!e || !e.paid_at || e.purged_at) return;
-  const at = deletionDate(new Date(e.ends_at), e.cfg);
+  // Demo albums never expire (lib/demo.ts clears what visitors add instead).
+  if (!e || !e.paid_at || e.purged_at || e.is_demo) return;
+  const at =deletionDate(new Date(e.ends_at), e.cfg);
   // Moving the date later re-arms the warning email.
   await q(
     "update events set deletion_at = $2, warned_at = case when $2 > coalesce(deletion_at, $2) then null else warned_at end, updated_at = now() where id = $1",

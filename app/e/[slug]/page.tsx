@@ -8,6 +8,7 @@ import { coverUrl, getEventBySlug, guestPath, guestUrl, logoUrl, renamedSlug } f
 import { formatDate, formatDateTime } from "@/lib/format";
 import { currentGuest, currentGuestKey } from "@/lib/guests";
 import { currentUser } from "@/lib/auth";
+import { DEMO_HOURS } from "@/lib/demo";
 import { APP_URL } from "@/lib/env";
 import { albumOpen, eventPhase, uploadsOpen } from "@/lib/limits";
 import { memo } from "@/lib/memo";
@@ -92,11 +93,12 @@ export default async function GuestPage({ params }: { params: Promise<{ slug: st
       resumeKey={key}
       hostUrl={hostUrl}
       opensAt={albumOpen(e) ? null : formatDateTime(e.starts_at)}
+      demo={e.is_demo ? { hours: DEMO_HOURS, page: `${APP_URL}/demo` } : null}
       event={{
         name: e.name,
         description: e.description,
         venue: e.venue,
-        date: formatDate(e.starts_at),
+        date: e.is_demo ? "Live demo" : formatDate(e.starts_at),
         cover: coverUrl(e),
         logo: f.custom_branding ? logoUrl(e) : null,
         accent: (f.custom_branding && e.accent_color) || "#e91d48",

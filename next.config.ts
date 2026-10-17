@@ -50,6 +50,7 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       { source: "/landing/:file*", headers: publicCache },
       { source: "/brand/:file*", headers: publicCache },
+      { source: "/demo/:file(.+\\.jpg)", headers: publicCache },
       { source: "/:icon(icon-192.png|icon-512.png|icon-maskable-512.png)", headers: publicCache },
     ];
   },

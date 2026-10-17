@@ -34,7 +34,7 @@ export async function upcomingLoad(days = 60): Promise<EventLoad[]> {
   const rows = await q<Row>(
     `select e.id, e.name, e.starts_at, e.ends_at, e.plan_snapshot, e.addon_totals, e.overrides, u.email
      from events e join users u on u.id = e.owner_id
-     where e.paid_at is not null and e.purged_at is null
+     where e.paid_at is not null and e.purged_at is null and not e.is_demo
        and e.ends_at > now() - interval '3 hours' and e.starts_at < now() + make_interval(days => $1)
      order by e.starts_at`,
     [days],

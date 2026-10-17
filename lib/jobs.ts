@@ -1,5 +1,6 @@
 import "server-only";
 import { q } from "@/lib/db";
+import { expireDemoContent } from "@/lib/demo";
 import { sendEmail } from "@/lib/email";
 import { deletedEmail, deletionWarningEmail } from "@/lib/email-templates";
 import { getSetting } from "@/lib/settings";
@@ -103,8 +104,9 @@ export async function runHourly() {
   const warned = await sendDeletionWarnings();
   const purged = await purgeExpiredEvents();
   const drafts = await cleanup();
+  const demo = await expireDemoContent();
   await q("insert into settings (key, value, updated_at) values ('last_cron', $1, now()) on conflict (key) do update set value = excluded.value, updated_at = now()", [
-    JSON.stringify({ at: new Date().toISOString(), stale, warned, purged, drafts }),
+    JSON.stringify({ at: new Date().toISOString(), stale, warned, purged, drafts, demo }),
   ]);
-  return { stale, warned, purged, drafts };
+  return { stale, warned, purged, drafts, demo };
 }

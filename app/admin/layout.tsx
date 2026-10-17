@@ -8,6 +8,7 @@ const NAV: NavItem[] = [
   { href: "/admin/events", label: "Events", icon: "events", group: "Business" },
   { href: "/admin/plans", label: "Packages & add-ons", icon: "plans", group: "Business" },
   { href: "/admin/promos", label: "Promo codes", icon: "promos", group: "Business" },
+  { href: "/admin/demos", label: "Demo albums", icon: "demo", group: "Business" },
   { href: "/admin/settings", label: "Settings", icon: "settings", group: "System" },
   { href: "/admin/logs", label: "Logs", icon: "logs", group: "System" },
 ];

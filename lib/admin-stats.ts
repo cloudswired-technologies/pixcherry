@@ -23,7 +23,7 @@ export async function adminOverview() {
          count(*) filter (where paid_at is null)::int drafts,
          count(*) filter (where paid_at is not null)::int total_paid,
          coalesce(sum(bytes_used) filter (where purged_at is null), 0)::text bytes
-       from events`,
+       from events where not is_demo`,
     ),
     one<{ n30: number; nprev: number; stored: number }>(
       `select count(*) filter (where ready_at > now() - interval '30 days')::int n30,
@@ -49,11 +49,11 @@ export async function adminOverview() {
        group by d order by d`,
     ),
     q<{ label: string; value: number }>(
-      "select coalesce(plan_snapshot->>'name', '—') as label, count(*)::int as value from events where paid_at is not null group by 1 order by 2 desc limit 6",
+      "select coalesce(plan_snapshot->>'name', '—') as label, count(*)::int as value from events where paid_at is not null and not is_demo group by 1 order by 2 desc limit 6",
     ),
     q<{ id: string; name: string; cover_key: string | null; updated_at: Date; photo_count: number; guest_count: number; email: string; ends_at: Date }>(
       `select e.id, e.name, e.cover_key, e.updated_at, e.photo_count, e.guest_count, e.ends_at, u.email from events e join users u on u.id = e.owner_id
-       where e.paid_at is not null and e.purged_at is null and now() between e.starts_at and e.ends_at order by e.photo_count desc limit 6`,
+       where e.paid_at is not null and e.purged_at is null and not e.is_demo and now() between e.starts_at and e.ends_at order by e.photo_count desc limit 6`,
     ),
     q<{ id: string; amount_cents: number; description: string; paid_at: Date; email: string; event: string; event_id: string }>(
       `select p.id, p.amount_cents, p.description, p.paid_at, u.email, e.name as event, e.id as event_id
@@ -68,7 +68,7 @@ export async function adminOverview() {
     ),
     q<{ id: string; name: string; photo_count: number; guest_count: number; plan: string | null }>(
       `select id, name, photo_count, guest_count, plan_snapshot->>'name' plan from events
-       where paid_at is not null and purged_at is null order by photo_count desc limit 5`,
+       where paid_at is not null and purged_at is null and not is_demo order by photo_count desc limit 5`,
     ),
     one<{ waiting: number; processing: number; failed24: number; pending: number }>(
       `select count(*) filter (where status = 'uploaded')::int waiting, count(*) filter (where status = 'processing')::int processing,

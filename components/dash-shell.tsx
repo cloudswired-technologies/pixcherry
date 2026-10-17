@@ -21,6 +21,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  Sparkles,
   Target,
   UserRound,
   Users,
@@ -52,6 +53,7 @@ const ICONS = {
   promos: BadgePercent,
   logs: ScrollText,
   gauge: Gauge,
+  demo: Sparkles,
   admin: Shield,
   account: UserRound,
 } satisfies Record<string, LucideIcon>;
