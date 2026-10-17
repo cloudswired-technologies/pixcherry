@@ -4,9 +4,14 @@ import { clientIp } from "@/lib/rate-limit";
 // Cloudflare Turnstile. Active only when both keys are set (production);
 // without them (local dev, tests) every check passes.
 
+// Read at run time from the server's .env. Next bakes `process.env.NEXT_PUBLIC_*` into
+// the build, and production is built on a PC without the key, which silently switched
+// the check off on live (found 2026-10-17). Going through `env` avoids the baking.
+const env = process.env;
+
 export function turnstileSiteKey(): string | null {
-  const key = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  return key && process.env.TURNSTILE_SECRET_KEY ? key : null;
+  const key = env["NEXT_PUBLIC_TURNSTILE_SITE_KEY"];
+  return key && env["TURNSTILE_SECRET_KEY"] ? key : null;
 }
 
 export async function verifyTurnstile(token: string | null | undefined): Promise<boolean> {
