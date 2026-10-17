@@ -1073,6 +1073,7 @@ export function GuestApp(p: Props) {
           askName={p.event.askName}
           siteKey={p.siteKey}
           bot={bot}
+          onBotToken={(token) => setBot({ token, tick: true })}
           onRetryCheck={retryCheck}
           onJoined={onJoined}
           onAvatar={(url) => {
@@ -1082,14 +1083,15 @@ export function GuestApp(p: Props) {
           canUpload={p.canUpload}
         />
       </Sheet>
-      {p.siteKey && p.canUpload && !joined ? (
-        // Invisible unless Cloudflare asks for a tick; then shown above the join sheet.
-        <div className={bot.tick && joinFor ? "fixed inset-x-4 top-4 z-[75] flex justify-center" : "pointer-events-none fixed -left-[9999px] top-0"}>
+      {p.siteKey && p.canUpload && !joined && !bot.tick ? (
+        // The background check: takes no space unless Cloudflare wants a tick, and then it
+        // hands over to the visible widget in the join sheet.
+        <div className="px-4">
           <Turnstile
             key={check}
             siteKey={p.siteKey}
-            onToken={(token) => setBot((b) => ({ token, tick: token ? false : b.tick }))}
-            onInteractive={() => setBot((b) => ({ ...b, tick: true }))}
+            onToken={(token) => setBot({ token, tick: false })}
+            onInteractive={() => setBot({ token: null, tick: true })}
           />
         </div>
       ) : null}
@@ -1102,6 +1104,7 @@ function JoinForm({
   askName,
   siteKey,
   bot,
+  onBotToken,
   onRetryCheck,
   onJoined,
   onAvatar,
@@ -1111,6 +1114,7 @@ function JoinForm({
   askName: boolean;
   siteKey: string | null;
   bot: { token: string | null; tick: boolean };
+  onBotToken: (token: string | null) => void;
   onRetryCheck: () => void;
   onJoined: (j: NonNullable<JoinState["joined"]> & { avatar?: string | null }) => void;
   onAvatar: (url: string) => void;
@@ -1220,6 +1224,7 @@ function JoinForm({
           }}
         />
       ) : null}
+      {siteKey && tick ? <Turnstile siteKey={siteKey} onToken={onBotToken} /> : null}
       {token ? <input type="hidden" name="cf-turnstile-response" value={token} /> : null}
       {error ? <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p> : null}
       <input type="hidden" name="device" value={device} />
@@ -1251,7 +1256,7 @@ function JoinForm({
       ) : (
         <button disabled={busy || checking || needTick} className="inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3.5 font-bold text-white shadow-cherry disabled:opacity-60">
           {busy || checking ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
-          {needTick ? "Tick the box at the top first" : busy || checking ? "Joining…" : "Let's go 🎉"}
+          {needTick ? "Tick the box above first" : busy || checking ? "Joining…" : "Let's go 🎉"}
         </button>
       )}
     </form>
