@@ -8,7 +8,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!(await rateLimit("pulse", 20_000, 60_000))) return NextResponse.json({ error: "Slow down." }, { status: 429 });
   const p = await albumPulse((await params).slug);
   if (!p) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  // Same answer for every phone in the album: Cloudflare may serve it for 3 s,
+  // Same answer for every phone in the album: Cloudflare may serve it for 2 s,
   // so hundreds of open phones cost the server a handful of requests.
-  return NextResponse.json(p, { headers: { "cache-control": "public, max-age=0, s-maxage=3", "cdn-cache-control": "max-age=3" } });
+  return NextResponse.json(p, { headers: { "cache-control": "public, max-age=0, s-maxage=2", "cdn-cache-control": "max-age=2" } });
 }

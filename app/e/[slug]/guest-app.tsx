@@ -192,6 +192,9 @@ export function GuestApp(p: Props) {
   }, []);
 
   const statsAt = useRef(0);
+  // When this phone last shared a photo: its own photo landing refreshes the counts at once.
+  const myUploadAt = useRef(0);
+  const statsLater = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadStats = useCallback(async () => {
     statsAt.current = Date.now();
     const r = await fetch(`/api/e/${p.slug}/stats`).catch(() => null);
@@ -231,6 +234,7 @@ export function GuestApp(p: Props) {
     remaining: Math.max(0, p.limits.perGuest - (joined?.uploaded ?? 0)),
     onUploaded: () => {
       all.refreshSoon();
+      myUploadAt.current = Date.now();
       setTimeout(loadStats, 4000);
       setTimeout(() => setPeopleKey((k) => k + 1), 5000);
     },
@@ -263,6 +267,10 @@ export function GuestApp(p: Props) {
     meRef.current = joined?.id ?? null;
   }, [joined]);
   const latestRef = useRef<string | null>(null);
+  // Uploaders seen in the pulse, kept until their photo lands (or 10 s): an upload is only in
+  // flight for a few seconds, so tiles would otherwise flicker or be missed between polls.
+  const seenUploaders = useRef(new Map<string, { guest: string | null; name: string | null; n: number; at: number }>());
+  const othersSig = useRef("[]");
   useEffect(() => {
     const tick = async () => {
       if (document.hidden) return;
@@ -271,22 +279,51 @@ export function GuestApp(p: Props) {
       const r = await fetch(`/api/e/${p.slug}/pulse`, { cache: "no-store" }).catch(() => null);
       if (!r?.ok) return;
       const b = (await r.json()) as { latest: string | null; uploading: { guest: string | null; name: string | null; n: number }[] };
-      setOthers(b.uploading.filter((u) => u.guest !== meRef.current));
+      const now = Date.now();
+      const landed = !!b.latest && !!latestRef.current && b.latest !== latestRef.current;
+      const live = new Set<string>();
+      for (const u of b.uploading) {
+        if (u.guest === meRef.current) continue;
+        const k = u.guest ?? "host";
+        live.add(k);
+        seenUploaders.current.set(k, { ...u, at: now });
+      }
+      for (const [k, v] of seenUploaders.current) if (!live.has(k) && (landed || now - v.at > 10_000)) seenUploaders.current.delete(k);
+      // Only when the list really changed: a re-render of the whole album every few seconds is
+      // wasted work on cheap phones (and froze the in-app camera in tests).
+      const next = [...seenUploaders.current.values()].map(({ guest, name, n }) => ({ guest, name, n }));
+      const sig = JSON.stringify(next);
+      if (sig !== othersSig.current) {
+        othersSig.current = sig;
+        setOthers(next);
+      }
       if (b.latest && b.latest !== latestRef.current) {
         // A new photo landed somewhere: fetch it now instead of waiting for the slow poll.
         // Spread over a few seconds so hundreds of phones don't all ask at the same moment,
         // and the leaderboard at most every 15 s.
         if (latestRef.current) {
-          setTimeout(() => {
+          if (now - myUploadAt.current < 60_000) {
+            // Probably this guest's own photo: counts and missions right away (it may take longer
+            // than the 4 s guess to be processed).
             pollAll();
-            if (Date.now() - statsAt.current > 15_000) loadStats();
-          }, Math.random() * 3000);
+            loadStats();
+          } else {
+            setTimeout(pollAll, Math.random() * 3000);
+            // The leaderboard at most every 15 s, but always caught up afterwards.
+            if (!statsLater.current) {
+              const wait = Math.max(0, 15_000 - (now - statsAt.current)) + Math.random() * 3000;
+              statsLater.current = setTimeout(() => {
+                statsLater.current = null;
+                loadStats();
+              }, wait);
+            }
+          }
         }
         latestRef.current = b.latest;
       }
     };
     const first = setTimeout(tick, 1000);
-    const t = setInterval(tick, 6000);
+    const t = setInterval(tick, 3000);
     return () => {
       clearTimeout(first);
       clearInterval(t);
