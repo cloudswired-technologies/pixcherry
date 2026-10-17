@@ -266,7 +266,8 @@ export function GuestApp(p: Props) {
   useEffect(() => {
     meRef.current = joined?.id ?? null;
   }, [joined]);
-  const latestRef = useRef<string | null>(null);
+  // undefined = the pulse hasn't answered yet; null = the album has no photo yet.
+  const latestRef = useRef<string | null | undefined>(undefined);
   // Uploaders seen in the pulse, kept until their photo lands (or 10 s): an upload is only in
   // flight for a few seconds, so tiles would otherwise flicker or be missed between polls.
   const seenUploaders = useRef(new Map<string, { guest: string | null; name: string | null; n: number; at: number }>());
@@ -280,7 +281,7 @@ export function GuestApp(p: Props) {
       if (!r?.ok) return;
       const b = (await r.json()) as { latest: string | null; uploading: { guest: string | null; name: string | null; n: number }[] };
       const now = Date.now();
-      const landed = !!b.latest && !!latestRef.current && b.latest !== latestRef.current;
+      const landed = latestRef.current !== undefined && !!b.latest && b.latest !== latestRef.current;
       const live = new Set<string>();
       for (const u of b.uploading) {
         if (u.guest === meRef.current) continue;
@@ -301,7 +302,7 @@ export function GuestApp(p: Props) {
         // A new photo landed somewhere: fetch it now instead of waiting for the slow poll.
         // Spread over a few seconds so hundreds of phones don't all ask at the same moment,
         // and the leaderboard at most every 15 s.
-        if (latestRef.current) {
+        if (latestRef.current !== undefined) {
           if (now - myUploadAt.current < 60_000) {
             // Probably this guest's own photo: counts and missions right away (it may take longer
             // than the 4 s guess to be processed).
@@ -321,6 +322,8 @@ export function GuestApp(p: Props) {
         }
         latestRef.current = b.latest;
       }
+      // First answer from an empty album: remember "no photo yet", so its first photo counts as new.
+      if (latestRef.current === undefined) latestRef.current = b.latest;
     };
     const first = setTimeout(tick, 1000);
     const t = setInterval(tick, 3000);
