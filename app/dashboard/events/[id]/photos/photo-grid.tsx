@@ -175,7 +175,7 @@ function Lightbox({ eventId, slug, photos, index, onIndex, onClose }: { eventId:
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#0b0b0d]/95 text-white backdrop-blur lg:flex-row" role="dialog" aria-modal="true" aria-label="Photo">
       <div className="relative min-h-0 flex-1">
-        <ZoomableImage key={p.id} src={p.md} full={p.full} alt={p.name ? `Photo by ${p.name}` : "Event photo"} handle={zoomer} onZoomChange={setZoomed} />
+        <ZoomableImage key={p.id} src={p.md} preview={p.sm} full={p.full} alt={p.name ? `Photo by ${p.name}` : "Event photo"} handle={zoomer} onZoomChange={setZoomed} />
         {!zoomed && index > 0 ? (
           <button type="button" onClick={() => go(index - 1)} className="absolute left-3 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 hover:bg-black/70" aria-label="Previous photo">
             <ChevronLeft className="size-6" aria-hidden />

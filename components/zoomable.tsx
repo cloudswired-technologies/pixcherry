@@ -14,6 +14,7 @@ type T = { s: number; x: number; y: number };
 export function ZoomableImage({
   src,
   full,
+  preview,
   alt,
   onZoomChange,
   onDoubleTap,
@@ -23,6 +24,8 @@ export function ZoomableImage({
   src: string;
   /** Full-size file, loaded once the photo is zoomed. */
   full?: string;
+  /** A small version already on the phone (the gallery thumbnail): shown at once while `src` loads. */
+  preview?: string;
   alt: string;
   onZoomChange?: (zoomed: boolean) => void;
   /** Replaces "double-tap zooms" (e.g. double-tap to heart). Pinch and wheel still zoom. */
@@ -33,6 +36,7 @@ export function ZoomableImage({
   const box = useRef<HTMLDivElement>(null);
   const [t, setT] = useState<T>({ s: 1, x: 0, y: 0 });
   const [hi, setHi] = useState(false);
+  const [ready, setReady] = useState(false);
   const [moving, setMoving] = useState(false); // fingers down: follow them without easing
   const tRef = useRef(t);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -170,8 +174,17 @@ export function ZoomableImage({
       }}
       data-zoomed={t.s > 1.01 ? "true" : "false"}
     >
+      {preview && !ready ? (
+        // A background, not a second <img>: the photo stays the only image in the viewer.
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-contain bg-center bg-no-repeat"
+          style={{ backgroundImage: `url("${preview}")`, transform: `translate(${t.x}px, ${t.y}px) scale(${t.s})` }}
+        />
+      ) : null}
       <img
         src={hi && full ? full : src}
+        onLoad={() => setReady(true)}
         alt={alt}
         draggable={false}
         className="absolute inset-0 size-full object-contain will-change-transform"

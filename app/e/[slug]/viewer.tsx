@@ -184,6 +184,7 @@ export function Viewer({
         <div key={ph.id} className="absolute inset-0" style={{ animation: `${dir > 0 ? "pc-in-right" : "pc-in-left"} 0.3s ease` }}>
           <ZoomableImage
             src={ph.md}
+            preview={ph.sm}
             full={ph.status === "ready" ? ph.full : undefined}
             alt={ph.by ? `Photo by ${ph.by}` : "Event photo"}
             handle={zoomer}

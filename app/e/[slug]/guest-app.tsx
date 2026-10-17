@@ -266,7 +266,9 @@ export function GuestApp(p: Props) {
   useEffect(() => {
     const tick = async () => {
       if (document.hidden) return;
-      const r = await fetch(`/api/e/${p.slug}/pulse`).catch(() => null);
+      // Never from the phone's own cache (Cloudflare once stretched it to 4 h, so new uploads
+      // and photos stopped showing); Cloudflare's 3-second edge copy still spares the server.
+      const r = await fetch(`/api/e/${p.slug}/pulse`, { cache: "no-store" }).catch(() => null);
       if (!r?.ok) return;
       const b = (await r.json()) as { latest: string | null; uploading: { guest: string | null; name: string | null; n: number }[] };
       setOthers(b.uploading.filter((u) => u.guest !== meRef.current));
