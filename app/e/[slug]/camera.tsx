@@ -4,24 +4,45 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Zap, ZapOff } from "lucide-react";
 import { LOOKS, createRenderer, drawOverlays, polaroid, stampText, type Look, type Renderer } from "@/lib/client/glfx";
 import { playAdvance, playShutter, unlockAudio } from "@/lib/client/camera-sounds";
-import { stillPhoto } from "@/lib/client/still";
+import { photoAspect, stillPhoto } from "@/lib/client/still";
 import { PHOTO_JPEG, PHOTO_MAX_PX } from "@/lib/client/photo-quality";
 import { CaptionOverlay, ShotExtras } from "./shot-extras";
 
 // PixCherry camera: a live viewfinder with the film look, shutter sound and
-// animation, shots-left counter — and the photo itself taken as a real still
-// from the camera sensor where the phone allows it (Android Chrome), not a
-// video frame. Pinch or tap 1×/2× to zoom (the camera's own zoom when it has
-// one), tap to focus, flash for the back camera. Review before sharing: look,
-// mission, hashtags, caption.
+// animation, shots-left counter. The photo itself is always a real still from
+// the camera at full resolution (ImageCapture, Android Chrome), never a frame of
+// the viewfinder; browsers without ImageCapture (iPhone) never open this camera,
+// Snap uses the phone's own camera app there (see guest-app + develop). The
+// viewfinder gets the photo's shape, so the photo shows what the guest saw.
+// Pinch or tap 1×/2× to zoom (the camera's own zoom when it has one), tap to
+// focus, flash for the back camera. Review before sharing: look, mission,
+// hashtags, caption.
 
 type Mission = { id: string; title: string; emoji: string | null };
-type Shot = { file: File; url: string; mp: number; source: "photo" | "frame" };
+type Shot = { file: File; url: string; mp: number };
 type Zoom = { min: number; max: number; step: number; hw: boolean };
 type MediaCaps = MediaTrackCapabilities & { zoom?: { min: number; max: number; step?: number }; torch?: boolean; focusMode?: string[] };
 
 const MAX_CANVAS_PIXELS = 16_000_000;
 const DIGITAL_MAX = 4;
+
+/** If the camera's photos have another shape than the viewfinder (a 4:3 photo next to a 16:9
+ *  stream), switch the viewfinder to the photo's shape at the camera's own size (no cropping). */
+async function matchPhotoShape(t: MediaStreamTrack) {
+  const photo = await photoAspect(t);
+  const s = t.getSettings();
+  if (!photo || !s.width || !s.height) return;
+  if (Math.abs(Math.max(s.width, s.height) / Math.min(s.width, s.height) - photo) < 0.02) return;
+  const landscape = s.width >= s.height;
+  await t
+    .applyConstraints({
+      width: { ideal: landscape ? 2560 : 1920 },
+      height: { ideal: landscape ? 1920 : 2560 },
+      aspectRatio: { exact: landscape ? photo : 1 / photo },
+      resizeMode: { exact: "none" },
+    } as MediaTrackConstraints)
+    .catch(() => {}); // no stream in that shape: keep the one we have
+}
 
 export function PixCamera({
   onClose,
@@ -107,10 +128,16 @@ export function PixCamera({
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1920 } }, audio: false });
+        // The viewfinder asks for the photo's shape (most cameras take 4:3) at the camera's own size.
+        // Left to itself the browser may pick a wider 16:9 stream, which shows less than the photo,
+        // so the photo then looks zoomed out next to what the guest saw.
+        const shape = { aspectRatio: { ideal: 4 / 3 }, resizeMode: { ideal: "none" } };
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1920 }, ...shape } as MediaTrackConstraints, audio: false });
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
         const t = stream.getVideoTracks()[0] ?? null;
         track.current = t;
+        if (t) await matchPhotoShape(t);
+        if (cancelled) return;
         const caps = (t?.getCapabilities?.() ?? {}) as MediaCaps;
         if (caps.zoom && caps.zoom.max > caps.zoom.min) setZoomCaps({ min: caps.zoom.min, max: Math.min(caps.zoom.max, 10), step: caps.zoom.step ?? 0.1, hw: true });
         else setZoomCaps({ min: 1, max: DIGITAL_MAX, step: 0.1, hw: false });
@@ -158,9 +185,11 @@ export function PixCamera({
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     v.addEventListener("loadedmetadata", fit);
+    v.addEventListener("resize", fit); // the stream changed size (e.g. matched to the photo's shape)
     return () => {
       ro.disconnect();
       v.removeEventListener("loadedmetadata", fit);
+      v.removeEventListener("resize", fit);
     };
   }, [ready, look.polaroid]);
 
@@ -247,25 +276,16 @@ export function PixCamera({
     let still: ImageBitmap | null = null;
     try {
       const digital = zoomCaps.hw ? 1 : zoomRef.current;
-      // A real photo from the sensor where possible; otherwise this video frame.
+      // Always a real photo from the camera, never a frame of the viewfinder.
       still = await stillPhoto(track.current, PHOTO_MAX_PX, digital);
-      const l = lookRef.current;
-      let src: TexImageSource;
-      let sx = 0;
-      let sy = 0;
-      let sw: number;
-      let sh: number;
-      if (still) {
-        src = still;
-        sw = still.width;
-        sh = still.height;
-      } else {
-        src = v;
-        sw = Math.round(v.videoWidth / digital);
-        sh = Math.round(v.videoHeight / digital);
-        sx = Math.round((v.videoWidth - sw) / 2);
-        sy = Math.round((v.videoHeight - sh) / 2);
+      if (!still) {
+        setError("This browser couldn't take a full-quality photo. Use your phone's camera instead.");
+        return;
       }
+      const l = lookRef.current;
+      const src = still;
+      const sw = still.width;
+      const sh = still.height;
       const k = Math.min(1, PHOTO_MAX_PX / Math.max(sw, sh), Math.sqrt(MAX_CANVAS_PIXELS / (sw * sh)));
       const w = Math.round(sw * k);
       const h = Math.round(sh * k);
@@ -281,7 +301,7 @@ export function PixCamera({
           ctx.translate(w, 0);
           ctx.scale(-1, 1);
         }
-        ctx.drawImage(src as CanvasImageSource, sx, sy, sw, sh, 0, 0, w, h);
+        ctx.drawImage(src, 0, 0, w, h);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       } else {
         // Film look: the same shader as the viewfinder, on the full-size photo.
@@ -290,7 +310,7 @@ export function PixCamera({
         pre.height = h;
         const pctx = pre.getContext("2d")!;
         pctx.imageSmoothingQuality = "high";
-        pctx.drawImage(src as CanvasImageSource, sx, sy, sw, sh, 0, 0, w, h);
+        pctx.drawImage(src, 0, 0, w, h);
         const gc = document.createElement("canvas");
         const r = createRenderer(gc, true);
         if (r) {
@@ -315,8 +335,8 @@ export function PixCamera({
       out.width = out.height = 0;
       if (blob) {
         const file = new File([blob], `pixcherry-${Date.now()}.jpg`, { type: "image/jpeg" });
-        const mp = Math.round(((still ? still.width * still.height : sw * sh) / 1e6) * 10) / 10;
-        setTimeout(() => setReview({ file, url: URL.createObjectURL(file), mp, source: still ? "photo" : "frame" }), 120);
+        const mp = Math.round(((sw * sh) / 1e6) * 10) / 10;
+        setTimeout(() => setReview({ file, url: URL.createObjectURL(file), mp }), 120);
       }
     } finally {
       still?.close();
@@ -471,7 +491,7 @@ export function PixCamera({
               <CaptionOverlay caption={caption} />
             </div>
             <span className="absolute left-5 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white/85">
-              {review.mp} MP · {review.source === "photo" ? "camera photo" : "video frame"}
+              {review.mp} MP · camera photo
             </span>
           </div>
         ) : null}

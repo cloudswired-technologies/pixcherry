@@ -32,6 +32,7 @@ import { useUploader } from "@/lib/client/uploader";
 import { makeShareCard } from "@/lib/client/share-card";
 import { deviceSignals } from "@/lib/client/device";
 import { isPrivateWindow } from "@/lib/client/private-mode";
+import { canTakeStill } from "@/lib/client/still";
 import type { GalleryPhoto } from "@/lib/photos";
 import { join, rename, type JoinState } from "./actions";
 import { MissionsPanel, TopPanel, useMissionBoard } from "./boards";
@@ -138,8 +139,10 @@ export function GuestApp(p: Props) {
   const [order, setOrder] = useState<"new" | "old" | "top">("new");
   // The viewer follows a photo id: new photos arriving at the top must not shift what's on screen.
   const [open, setOpen] = useState<{ list: "all" | "album"; id: string } | null>(null);
-  // Snap opens the PixCamera; if the browser can't open a camera, the phone's own
-  // camera app is the fallback and its photo goes through the "develop" screen.
+  // Every snap is a full-resolution photo from the camera. Where the browser can take one
+  // itself (ImageCapture, Android Chrome) Snap opens the PixCamera; elsewhere (iPhone) it
+  // opens the phone's own camera app, and "develop" adds the look. The phone's camera is also
+  // the fallback when the PixCamera can't open or can't take a photo.
   const [cameraOpen, setCameraOpen] = useState(false);
   const [shot, setShot] = useState<File | null>(null);
   const snap = useRef<HTMLInputElement>(null);
@@ -387,6 +390,7 @@ export function GuestApp(p: Props) {
       if (kind === "wish") return setWishOpen(true);
       if (kind === "camera" && f.camera) {
         setMission(m);
+        if (!canTakeStill()) return snap.current?.click(); // inside the tap, so iOS opens the camera
         return setCameraOpen(true);
       }
       setPickMissionId(m);
@@ -409,7 +413,11 @@ export function GuestApp(p: Props) {
       // Android still counts the "Let's go" tap and opens the camera/picker; iOS needs one more tap.
       if (next.kind === "camera" && f.camera) {
         setMission(next.mission ?? null);
-        setTimeout(() => setCameraOpen(true), 50);
+        if (canTakeStill()) setTimeout(() => setCameraOpen(true), 50);
+        else {
+          snap.current?.click();
+          flash("You're in! Tap Snap to take your photo 📸");
+        }
       } else if (next.kind === "upload") {
         pick.current?.click();
         flash("You're in! Tap Upload to pick your photos 📸");

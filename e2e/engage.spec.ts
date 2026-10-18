@@ -71,7 +71,7 @@ test("missions, camera, hearts, folders, wishes, slideshow", async ({ browser, p
   await expect(cam.getByRole("button", { name: "Zoom 2×" })).toHaveText("2×");
   await cam.getByRole("button", { name: "Take photo" }).click();
   await expect(cam.getByAltText("Your photo")).toBeVisible();
-  await expect(cam.getByText(/MP · (camera photo|video frame)/)).toBeVisible();
+  await expect(cam.getByText(/MP · camera photo/)).toBeVisible(); // a real still, never a viewfinder frame
   await cam.getByRole("button", { name: "Add caption" }).click();
   await cam.getByRole("dialog", { name: "Write a caption" }).getByLabel("Caption").fill("Best seat in the house");
   await cam.getByRole("button", { name: "Done" }).click();
