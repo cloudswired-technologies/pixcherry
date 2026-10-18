@@ -5,7 +5,7 @@ import { currentUser } from "@/lib/auth";
 import { turnstileSiteKey } from "@/lib/turnstile";
 import { LoginForm } from "./login-form";
 
-export const metadata = { title: "Log in" };
+export const metadata = { title: "Log in", robots: { index: false, follow: true } };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const raw = (await searchParams).next ?? "/dashboard";

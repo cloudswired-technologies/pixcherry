@@ -3,10 +3,17 @@ import { ArrowRight } from "lucide-react";
 import { DeskShot, PhoneShot, type ShotTone } from "@/components/shot-frame";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { LinkButton } from "@/components/ui";
+import { OG_IMAGE } from "@/lib/seo";
+
+const TITLE = "How to collect guest photos with a QR code: step-by-step guide";
+const DESCRIPTION =
+  "Create your event, print the QR code, and let guests snap and share photos to one live album. A step-by-step guide for weddings, Raya open houses and any event.";
 
 export const metadata = {
-  title: "How to use PixCherry — step by step",
-  description: "Set up your event album, share the QR code, and see how guests snap and share. A step-by-step guide for hosts and guests.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: "/guide" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/guide", type: "article", images: [OG_IMAGE] },
 };
 
 type Step = { title: string; text: string[]; img: string; alt: string; kind: "phone" | "desk"; tone?: ShotTone };
@@ -139,9 +146,10 @@ export default function Guide() {
       <SiteHeader />
       <main className="overflow-x-clip">
         <section className="container-page py-12 sm:py-16">
-          <h1 className="max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">How PixCherry works, step by step</h1>
+          <h1 className="max-w-2xl text-balance text-4xl font-extrabold tracking-tight sm:text-5xl">How to collect guest photos with a QR code</h1>
           <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-            Setting up takes a few minutes. On the day, your guests do the rest. Screens below are from a real PixCherry album.
+            A wedding, a Raya open house or a company dinner: setting up takes a few minutes, and on the day your guests do the rest. Screens below are from a real
+            PixCherry album.
           </p>
           <nav className="mt-6 flex flex-wrap gap-2" aria-label="Guide sections">
             <a href="#hosts" className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white">

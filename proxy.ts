@@ -18,17 +18,24 @@ function rewrite(req: NextRequest, pathname: string) {
   return NextResponse.rewrite(url);
 }
 
+function guestHost(req: NextRequest, path: string) {
+  if (path.startsWith("/api/") || /^\/[^/]+\.(?:png|svg|ico|js|txt|webp)$/.test(path)) return NextResponse.next();
+  if (path === "/") return rewrite(req, "/find");
+  if (path.startsWith("/e/")) return NextResponse.redirect(`${GUEST_URL}${path.slice(2)}${req.nextUrl.search}`, 308);
+  const m = path.match(GUEST_PAGE);
+  if (m && !RESERVED.has(m[1])) return rewrite(req, `/e/${m[1]}${m[2] ?? ""}`);
+  return NextResponse.redirect(`${APP_URL}${path}${req.nextUrl.search}`, 307);
+}
+
 export function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
 
   if (GUEST_HOST && host === GUEST_HOST) {
-    if (path.startsWith("/api/") || /^\/[^/]+\.(?:png|svg|ico|js|txt|webp)$/.test(path)) return NextResponse.next();
-    if (path === "/") return rewrite(req, "/find");
-    if (path.startsWith("/e/")) return NextResponse.redirect(`${GUEST_URL}${path.slice(2)}${req.nextUrl.search}`, 308);
-    const m = path.match(GUEST_PAGE);
-    if (m && !RESERVED.has(m[1])) return rewrite(req, `/e/${m[1]}${m[2] ?? ""}`);
-    return NextResponse.redirect(`${APP_URL}${path}${req.nextUrl.search}`, 307);
+    // Nothing on the guest host belongs in search results (albums are private links).
+    const res = guestHost(req, path);
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
   }
 
   // A dev server may run with the live GUEST_URL (so links and QR cards show

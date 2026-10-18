@@ -1,7 +1,7 @@
 import { DashShell, type NavItem } from "@/components/dash-shell";
 import { requireAdmin } from "@/lib/auth";
 
-export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" } };
+export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" }, robots: { index: false, follow: false } };
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Overview", icon: "gauge", exact: true, group: "Insights" },

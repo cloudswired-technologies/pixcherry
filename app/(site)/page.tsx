@@ -1,17 +1,46 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CalendarClock, Check, ChevronDown, ImagePlus, Link2, MessageCircleHeart, Play, QrCode, Users, Volume2 } from "lucide-react";
+import { JsonLd } from "@/components/json-ld";
 import { PlanCard } from "@/components/plan-card";
 import { DeskShot, PhoneShot, type ShotTone } from "@/components/shot-frame";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { cn, LinkButton } from "@/components/ui";
+import { APP_URL } from "@/lib/env";
 import { formatMoney } from "@/lib/format";
 import { listAddons, listPlans } from "@/lib/plans";
+import { OG_IMAGE, ORG_ID, SITE_DESCRIPTION, SITE_ID, SITE_NAME } from "@/lib/seo";
 
 // Landing page. Every image is a screenshot of the real app with real event photos, and the
 // promo videos come from the Remotion project (D:\SYSTEM DEVELOPMENT\pixcherry-video), both
 // prepared by scripts/landing-v2-assets.mjs. Every number comes from the live packages.
 
 export const dynamic = "force-dynamic";
+
+// Search: nobody local ranks for these yet (Oct 2026: page one is Kululu, Wedibox, GuestCam,
+// POV), so the title leads with what people type plus "Malaysia".
+export const metadata: Metadata = {
+  title: { absolute: "QR Code Photo Sharing for Weddings & Events in Malaysia | PixCherry" },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "QR code photo sharing",
+    "wedding photo sharing app",
+    "collect photos from wedding guests",
+    "event photo sharing Malaysia",
+    "guest photo album QR code",
+    "live photo slideshow",
+    "disposable camera app",
+    "kongsi gambar majlis kahwin",
+    "album gambar perkahwinan",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Every photo your guests take, in one live album",
+    description: "Guests scan a QR code and snap. No app, no sign-up. Photos land in one shared album and on the big screen within seconds.",
+    url: "/",
+    images: [OG_IMAGE],
+  },
+};
 
 const V = "/landing/v2";
 const H2 = "text-balance text-4xl font-extrabold leading-[1.05] tracking-[-0.025em] text-ink sm:text-5xl";
@@ -70,6 +99,14 @@ const EVENTS = [
 ];
 
 const FAQ: [string, string][] = [
+  [
+    "How do I collect photos from my wedding guests?",
+    "Put your PixCherry QR code on the tables, the welcome board or the big screen. Guests scan it, type their name and snap or upload, and every photo lands in one album in full quality. Afterwards you download everything as one ZIP, with a folder for each guest. No group chats or Drive links to chase.",
+  ],
+  [
+    "Why not just use a WhatsApp group or Google Drive?",
+    "WhatsApp shrinks photos and buries them in the chat, and uploading to a Drive folder needs a Google account and a link people lose. PixCherry needs no app or account, keeps photos sharp (up to 3072 pixels), shows them live on the big screen, and keeps every guest's photos in one album.",
+  ],
   ["Do guests need to download an app or make an account?", "No. They scan the QR code and the album opens in the phone's browser. They type their name (a selfie is optional) and start sharing."],
   ["Does it work on iPhone and Android?", "Yes, in the normal browser on both. iPhone photos (HEIC) are converted automatically."],
   ["What happens to photo quality?", "Photos are kept sharp: up to 3072 pixels on the long side, which is enough to print. They're shrunk a little on the phone first, so they upload quickly even on busy venue Wi-Fi."],
@@ -195,9 +232,53 @@ export default async function Home() {
   const paid = plans.filter((p) => p.price_cents > 0);
   const free = plans.find((p) => p.price_cents === 0);
   const from = paid.length ? Math.min(...paid.map((p) => p.price_cents)) : null;
+  const prices = plans.map((p) => p.price_cents / 100);
+
+  // Who we are, what the product is and costs (live packages), and the FAQ, for search engines.
+  const ld = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": ORG_ID,
+        name: SITE_NAME,
+        url: APP_URL,
+        logo: { "@type": "ImageObject", url: `${APP_URL}/apple-icon.png`, width: 180, height: 180 },
+        email: "support@pixcherry.com",
+        address: { "@type": "PostalAddress", addressRegion: "Johor", addressCountry: "MY" },
+        parentOrganization: { "@type": "Organization", name: "Cloudswired Technologies", url: "https://cloudswired.com" },
+      },
+      { "@type": "WebSite", "@id": SITE_ID, url: APP_URL, name: SITE_NAME, inLanguage: "en-MY", publisher: { "@id": ORG_ID } },
+      {
+        "@type": "SoftwareApplication",
+        name: SITE_NAME,
+        url: APP_URL,
+        description: SITE_DESCRIPTION,
+        applicationCategory: "MultimediaApplication",
+        operatingSystem: "Any web browser on iPhone or Android",
+        areaServed: { "@type": "Country", name: "Malaysia" },
+        image: `${APP_URL}${OG_IMAGE.url}`,
+        publisher: { "@id": ORG_ID },
+        ...(plans.length
+          ? {
+              offers: {
+                "@type": "AggregateOffer",
+                priceCurrency: "MYR",
+                lowPrice: Math.min(...prices),
+                highPrice: Math.max(...prices),
+                offerCount: plans.length,
+                offers: plans.map((p) => ({ "@type": "Offer", name: p.name, price: p.price_cents / 100, priceCurrency: "MYR", url: `${APP_URL}/#pricing` })),
+              },
+            }
+          : {}),
+      },
+      { "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) },
+    ],
+  };
 
   return (
     <>
+      <JsonLd data={ld} />
       <SiteHeader />
       <main className="overflow-x-clip">
         {/* ------------------------------------------------------------ hero */}
@@ -208,13 +289,14 @@ export default async function Home() {
           />
           <div className="container-page grid items-center gap-14 pb-16 pt-10 sm:pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-10 lg:pb-24">
             <div className="motion-safe:animate-[pc-rise_0.7s_cubic-bezier(0.2,0.8,0.2,1)_both]">
-              <p className="inline-flex items-center gap-2 text-sm font-semibold text-ink/70">
-                <span className="size-2 rounded-full bg-brand" aria-hidden />
-                The live photo album for every majlis
-              </p>
-              <h1 className="mt-5 text-balance text-5xl font-extrabold leading-[1.02] tracking-[-0.035em] text-ink sm:text-6xl lg:text-[4rem]">
-                Every photo your guests take, in one live album.
+              {/* The h1 names what people search for; the big line under it is the promise. */}
+              <h1 className="inline-flex items-center gap-2 text-sm font-semibold text-ink/70">
+                <span className="size-2 shrink-0 rounded-full bg-brand" aria-hidden />
+                QR code photo sharing for weddings & events in Malaysia
               </h1>
+              <p className="mt-5 text-balance text-5xl font-extrabold leading-[1.02] tracking-[-0.035em] text-ink sm:text-6xl lg:text-[4rem]">
+                Every photo your guests take, in one live album.
+              </p>
               <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
                 Guests scan a QR code and snap away. No app, no sign-up. Every photo lands in one shared album, on everyone’s phone and on the big screen, within seconds
                 and in full quality.
@@ -299,7 +381,10 @@ export default async function Home() {
         <section id="how" className="scroll-mt-20 border-y border-border bg-white py-16 sm:py-24">
           <div className="container-page">
             <div className="reveal flex flex-wrap items-end justify-between gap-6">
-              <h2 className={cn(H2, "max-w-xl")}>Ready in minutes. Your guests do the rest.</h2>
+              <div className="max-w-xl">
+                <h2 className={H2}>Ready in minutes. Your guests do the rest.</h2>
+                <p className={LEAD}>One QR code is all it takes. Guests share photos straight from their phone’s browser, with no app to download and no account to make.</p>
+              </div>
               <Link href="/guide" className="inline-flex items-center gap-1.5 font-semibold text-brand underline-offset-4 hover:underline">
                 Read the step-by-step guide <ArrowRight className="size-4" aria-hidden />
               </Link>
@@ -323,8 +408,8 @@ export default async function Home() {
         <section className="py-16 sm:py-28">
           <div className="container-page">
             <div className="reveal mx-auto max-w-2xl text-center">
-              <h2 className={H2}>Put it on the big screen, and the party joins in</h2>
-              <p className={cn(LEAD, "mx-auto")}>Open the slideshow on any TV or projector. Guests watch their photos go up, so they keep snapping.</p>
+              <h2 className={H2}>A live photo slideshow for the big screen</h2>
+              <p className={cn(LEAD, "mx-auto")}>Open the slideshow on any TV or projector. Guests watch their photos go up, and the whole party joins in.</p>
             </div>
             <div className="reveal relative mx-auto mt-12 max-w-5xl md:pb-14 md:pr-28">
               <figure>
@@ -418,8 +503,8 @@ export default async function Home() {
               <Tile
                 wide
                 className="md:col-span-2 lg:col-span-4"
-                title="A film camera in every phone"
-                text="Guests snap, pick a look and share in one tap. Twelve looks, from Kodak Gold to Polaroid."
+                title="A disposable camera in every phone"
+                text="Guests snap, pick a look and share in one tap. Twelve film looks, from Kodak Gold to Polaroid."
                 img={`${V}/develop-polaroid.webp`}
                 alt="The PixCherry camera with the Polaroid look"
                 tone="dark"

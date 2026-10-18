@@ -5,6 +5,7 @@ import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { LinkButton } from "@/components/ui";
 import { DEMO_HOURS, DEMO_SHOTS, listDemoCards } from "@/lib/demo";
 import { guestUrl } from "@/lib/events";
+import { OG_IMAGE } from "@/lib/seo";
 import { DemoQr } from "./demo-qr";
 
 // Live demo albums: pick an event, open it on two phones, snap on one and
@@ -12,9 +13,14 @@ import { DemoQr } from "./demo-qr";
 
 export const dynamic = "force-dynamic";
 
+const TITLE = "Live demo: try QR code photo sharing on two phones";
+const DESCRIPTION = "Open a demo wedding, Raya or birthday album on two phones, snap on one and watch the photo appear on the other within seconds. No sign-up.";
+
 export const metadata: Metadata = {
-  title: "Try a live demo",
-  description: "Open a demo event on two phones, snap on one and watch the photo appear on the other. No sign-up.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: "/demo" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/demo", images: [OG_IMAGE] },
 };
 
 const STEPS = [

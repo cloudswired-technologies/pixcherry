@@ -1,6 +1,10 @@
 import { LegalPage } from "../legal";
 
-export const metadata = { title: "Terms" };
+export const metadata = {
+  title: "Terms of service",
+  description: "The terms for using PixCherry, the QR code photo sharing service for weddings and events in Malaysia.",
+  alternates: { canonical: "/terms" },
+};
 
 // Written from how the service actually works (2026-10-18). Have it reviewed by a lawyer.
 const COMPANY = "Cloudswired Technologies (202003293747 (003180326-U))";

@@ -4,6 +4,8 @@ import { q } from "@/lib/db";
 import { coverUrl, guestUrl, listOwnerEvents } from "@/lib/events";
 import { eventPhase, type EventPhase } from "@/lib/limits";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 const PHASE: Record<EventPhase, { label: string; tone: ShellEvent["phaseTone"] }> = {
   draft: { label: "Not paid", tone: "warn" },
   upcoming: { label: "Upcoming", tone: "brand" },

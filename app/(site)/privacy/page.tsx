@@ -1,6 +1,10 @@
 import { LegalPage } from "../legal";
 
-export const metadata = { title: "Privacy" };
+export const metadata = {
+  title: "Privacy policy",
+  description: "How PixCherry handles your data and your guests' photos under Malaysia's PDPA, in English and Bahasa Melayu.",
+  alternates: { canonical: "/privacy" },
+};
 
 // Personal Data Protection Act 2010 notice, in English and Bahasa Melayu (s.7(3) requires both).
 // Written from how the service actually handles data (2026-10-18). Have it reviewed by a lawyer.
