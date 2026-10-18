@@ -303,8 +303,9 @@ export default async function Home() {
                 <span className="size-2 shrink-0 rounded-full bg-brand" aria-hidden />
                 QR code photo sharing for weddings & events in Malaysia
               </h1>
-              <p className="mt-5 text-balance text-5xl font-extrabold leading-[1.02] tracking-[-0.035em] text-ink sm:text-6xl lg:text-[4rem]">
-                Every photo your guests take, in one live album.
+              {/* Sized to stay on 2 lines from 390px up (measured on the live font): 40 / 60 / 56 at lg / 64 at xl. */}
+              <p className="mt-5 text-balance text-[2.5rem] font-extrabold leading-[1.02] tracking-[-0.035em] text-ink sm:text-6xl lg:text-[3.5rem] xl:text-[4rem]">
+                Every guest photo, in one live album.
               </p>
               <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
                 Guests scan a QR code and snap away. No app, no sign-up. Every photo lands in one shared album, on everyone’s phone and on the big screen, within seconds
