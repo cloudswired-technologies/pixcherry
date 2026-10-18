@@ -85,14 +85,17 @@ test("PixCamera: full-resolution still, viewfinder in the photo's shape", async 
   await ctx.close();
 });
 
-test("No ImageCapture (iPhone): Snap opens the phone's camera, develop adds the look", async ({ browser }) => {
+// Safari has ImageCapture too, but its photos are 5 MP, so an iPhone must go to the phone's camera
+// even though ImageCapture exists (Chromium here has it).
+const IPHONE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1";
+
+test("iPhone: Snap opens the phone's camera, develop adds the look", async ({ browser }) => {
   const slug = await paidEvent("camios");
-  const ctx = await phone(browser, slug);
-  await ctx.addInitScript(() => {
-    delete (window as unknown as { ImageCapture?: unknown }).ImageCapture;
-  });
+  const ctx = await phone(browser, slug, { userAgent: IPHONE_UA });
   const g = await ctx.newPage();
   await g.goto(`/e/${slug}`);
+  expect(await g.evaluate(() => typeof (window as unknown as { ImageCapture?: unknown }).ImageCapture)).toBe("function");
 
   // A 12 MP photo, as the phone's own camera would hand back.
   const file = joinPath(tmpdir(), `pixcherry-iphone-${Date.now()}.jpg`);

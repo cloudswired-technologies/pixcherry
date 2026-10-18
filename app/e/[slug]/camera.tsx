@@ -141,7 +141,10 @@ export function PixCamera({
         const caps = (t?.getCapabilities?.() ?? {}) as MediaCaps;
         if (caps.zoom && caps.zoom.max > caps.zoom.min) setZoomCaps({ min: caps.zoom.min, max: Math.min(caps.zoom.max, 10), step: caps.zoom.step ?? 0.1, hw: true });
         else setZoomCaps({ min: 1, max: DIGITAL_MAX, step: 0.1, hw: false });
-        setZoom(caps.zoom?.min ?? 1);
+        // Start from the zoom the camera is really at (usually 1×), not the lowest it allows: a phone with
+        // an ultra-wide lens reports 0.5 as its minimum but opens at 1×, so "0.5" showed while it was 1×.
+        const at = (t?.getSettings?.() as { zoom?: number } | undefined)?.zoom;
+        setZoom(typeof at === "number" ? at : caps.zoom && caps.zoom.min <= 1 && caps.zoom.max >= 1 ? 1 : (caps.zoom?.min ?? 1));
         setTorch({ can: !!caps.torch, on: false });
         const v = video.current!;
         v.srcObject = stream;
@@ -362,7 +365,7 @@ export function PixCamera({
   const last = roll.at(-1) ?? null;
   const digitalScale = zoomCaps.hw ? 1 : zoom;
   const stampSize = Math.max(10, Math.round(Math.min(box.w, box.h) * (look.stamp === "vhs" ? 0.04 : 0.055)));
-  const presets = [zoomCaps.min, ...[2, 5].filter((z) => z > zoomCaps.min && z <= zoomCaps.max)];
+  const presets = [zoomCaps.min, ...[1, 2, 5].filter((z) => z > zoomCaps.min && z <= zoomCaps.max)];
 
   return (
     <div className="fixed inset-0 z-[60] flex select-none flex-col bg-[#0b0b0d] text-white" role="dialog" aria-modal="true" aria-label="Camera">

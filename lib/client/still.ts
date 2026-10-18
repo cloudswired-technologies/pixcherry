@@ -1,7 +1,9 @@
 // A real still photo from the camera (Chrome on Android: ImageCapture.takePhoto): full sensor
 // resolution and the phone's own photo processing, never a frame of the viewfinder. Scaled down
-// here with high-quality resampling so the upload stays small. Browsers without ImageCapture
-// (iPhone Safari) don't get the PixCamera at all: Snap opens the phone's own camera app there.
+// here with high-quality resampling so the upload stays small. Browsers without ImageCapture, and
+// every iPhone/iPad, don't get the PixCamera at all: Snap opens the phone's own camera app there.
+// (Safari has takePhoto since iOS 18.4, but it returns 2592x1944 = 5 MP instead of the 12 MP
+// sensor: measured on a real iPhone, 2026-10-18. All iOS browsers are Safari underneath.)
 
 type PhotoCaps = { imageWidth?: { max?: number }; imageHeight?: { max?: number } };
 type ImageCaptureLike = { takePhoto(): Promise<Blob>; getPhotoCapabilities(): Promise<PhotoCaps> };
@@ -10,9 +12,16 @@ type ImageCaptureCtor = new (track: MediaStreamTrack) => ImageCaptureLike;
 const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
 const capture = () => (typeof window === "undefined" ? undefined : (window as unknown as { ImageCapture?: ImageCaptureCtor }).ImageCapture);
 
-/** Can this browser take a real still photo from the camera? */
+/** iPhone or iPad (iPadOS reports itself as a Mac, but Macs have no touch screen). */
+function appleMobile() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/** Can this browser take a full-resolution still photo from the camera itself? */
 export function canTakeStill() {
-  return typeof capture() === "function";
+  return typeof capture() === "function" && !appleMobile();
 }
 
 /** The shape of the camera's photos as long side / short side (usually 4/3), or null if unknown. */
