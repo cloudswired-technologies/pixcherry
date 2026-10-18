@@ -9,7 +9,7 @@ import { cn, LinkButton } from "@/components/ui";
 import { APP_URL } from "@/lib/env";
 import { formatMoney } from "@/lib/format";
 import { listAddons, listPlans } from "@/lib/plans";
-import { OG_IMAGE, ORG_ID, SITE_DESCRIPTION, SITE_ID, SITE_NAME } from "@/lib/seo";
+import { OG_IMAGE, ORG_ID, SITE_DESCRIPTION, SITE_ID, SITE_NAME, SOCIAL, WHATSAPP, WHATSAPP_URL } from "@/lib/seo";
 
 // Landing page. Every image is a screenshot of the real app with real event photos, and the
 // promo videos come from the Remotion project (D:\SYSTEM DEVELOPMENT\pixcherry-video), both
@@ -247,6 +247,15 @@ export default async function Home() {
         email: "support@pixcherry.com",
         address: { "@type": "PostalAddress", addressRegion: "Johor", addressCountry: "MY" },
         parentOrganization: { "@type": "Organization", name: "Cloudswired Technologies", url: "https://cloudswired.com" },
+        sameAs: SOCIAL.map((s) => s.url),
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          telephone: WHATSAPP.phone,
+          email: "support@pixcherry.com",
+          availableLanguage: ["English", "Malay"],
+          areaServed: "MY",
+        },
       },
       { "@type": "WebSite", "@id": SITE_ID, url: APP_URL, name: SITE_NAME, inLanguage: "en-MY", publisher: { "@id": ORG_ID } },
       {
@@ -652,7 +661,11 @@ export default async function Home() {
             <div className="lg:sticky lg:top-24 lg:self-start">
               <h2 className={H2}>Questions people ask</h2>
               <p className="mt-4 text-muted-foreground">
-                Something else? Email{" "}
+                Something else?{" "}
+                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink underline underline-offset-4">
+                  WhatsApp us
+                </a>{" "}
+                or email{" "}
                 <a href="mailto:support@pixcherry.com" className="font-semibold text-ink underline underline-offset-4">
                   support@pixcherry.com
                 </a>

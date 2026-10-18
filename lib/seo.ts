@@ -13,5 +13,14 @@ export const OG_IMAGE = {
   height: 630,
   alt: "PixCherry: guests scan a QR code and every photo lands in one live album",
 };
+export const SOCIAL = [
+  { name: "Facebook", url: "https://www.facebook.com/pixcherry/" },
+  { name: "Instagram", url: "https://www.instagram.com/pixcherryofficial" },
+  { name: "Threads", url: "https://www.threads.com/@pixcherryofficial" },
+  { name: "TikTok", url: "https://www.tiktok.com/@pixcherry.com" },
+] as const;
+// Sales/support WhatsApp: the floating button on the marketing pages + contactPoint in the JSON-LD.
+export const WHATSAPP = { number: "601153540045", phone: "+60-11-5354-0045", text: "Hi PixCherry, saya nak tanya sikit." };
+export const WHATSAPP_URL = `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(WHATSAPP.text)}`;
 export const ORG_ID = `${APP_URL}/#organization`;
 export const SITE_ID = `${APP_URL}/#website`;
