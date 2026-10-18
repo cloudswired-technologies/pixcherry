@@ -20,7 +20,7 @@ export type BtnVariant = keyof typeof BTN;
 
 export function btn(variant: BtnVariant = "primary", size: keyof typeof SIZE = "md", extra?: string) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center rounded-full font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4",
+    "inline-flex shrink-0 items-center justify-center rounded-full font-semibold whitespace-nowrap transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4",
     BTN[variant],
     SIZE[size],
     extra,
