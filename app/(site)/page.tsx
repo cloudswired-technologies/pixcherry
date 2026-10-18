@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CalendarClock, Check, ChevronDown, ImagePlus, Link2, MessageCircleHeart, Play, QrCode, Users, Volume2 } from "lucide-react";
 import { PlanCard } from "@/components/plan-card";
-import { DeskShot, PhoneShot } from "@/components/shot-frame";
+import { DeskShot, PhoneShot, type ShotTone } from "@/components/shot-frame";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { cn, LinkButton } from "@/components/ui";
 import { formatMoney } from "@/lib/format";
@@ -36,6 +36,7 @@ const STEPS = [
   {
     img: `${V}/join-sheet.webp`,
     alt: "A guest joining an album with just their name",
+    tone: "dim" as const,
     title: "Guests scan and join",
     text: "The album opens in their phone’s browser. They type a name and they’re in. No app, no password.",
   },
@@ -108,11 +109,12 @@ function HeroStage() {
           src={`${V}/wedding-develop-gold.webp`}
           alt="A guest's phone: a photo just taken at a wedding, with the Kodak Gold look, ready to share"
           className="w-[44%] -rotate-[4deg]"
+          tone="dark"
           priority
         />
         <div className="relative mt-[12%] w-[44%] rotate-[3deg]">
           <PhoneShot src={`${V}/wedding-b-after.webp`} alt="Another guest's phone: the same photo is already in the shared album" priority />
-          <span className="absolute -right-2 -top-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-ink shadow-lift">
+          <span className="absolute -right-3 top-[17%] inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-ink shadow-lift">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full rounded-full bg-ok opacity-60 motion-safe:animate-ping" />
               <span className="relative inline-flex size-2 rounded-full bg-ok" />
@@ -168,7 +170,7 @@ function ChatCard() {
 }
 
 // A feature card with the screenshot peeking up from the bottom edge.
-function Tile({ title, text, img, alt, className, wide, children }: { title: string; text: string; img: string; alt: string; className?: string; wide?: boolean; children?: React.ReactNode }) {
+function Tile({ title, text, img, alt, className, wide, tone, children }: { title: string; text: string; img: string; alt: string; className?: string; wide?: boolean; tone?: ShotTone; children?: React.ReactNode }) {
   return (
     <article className={cn("reveal group flex flex-col overflow-hidden rounded-[2rem] bg-white ring-1 ring-border transition duration-300 hover:-translate-y-1 hover:shadow-lift", wide && "md:flex-row", className)}>
       <div className={cn("p-6 sm:p-8", wide && "md:w-1/2 md:self-center md:p-10")}>
@@ -180,6 +182,7 @@ function Tile({ title, text, img, alt, className, wide, children }: { title: str
         <PhoneShot
           src={img}
           alt={alt}
+          tone={tone}
           className={cn("absolute left-1/2 w-[62%] max-w-[15rem] -translate-x-1/2 transition duration-500 group-hover:-translate-y-2", wide ? "top-8 md:top-12" : "top-2")}
         />
       </div>
@@ -304,7 +307,7 @@ export default async function Home() {
             <ol className="mt-14 grid gap-12 md:grid-cols-3 md:gap-8">
               {STEPS.map((s, i) => (
                 <li key={s.title} className={cn("reveal grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] items-center gap-6 md:block", i === 1 && "md:mt-12", i === 2 && "md:mt-24")}>
-                  <PhoneShot src={s.img} alt={s.alt} className="w-full md:max-w-[15rem]" />
+                  <PhoneShot src={s.img} alt={s.alt} tone={s.tone} className="w-full md:max-w-[15rem]" />
                   <div className="md:mt-8">
                     <span className="grid size-10 place-items-center rounded-full bg-brand text-lg font-extrabold text-white shadow-cherry">{i + 1}</span>
                     <h3 className="mt-4 text-xl font-bold text-ink">{s.title}</h3>
@@ -419,6 +422,7 @@ export default async function Home() {
                 text="Guests snap, pick a look and share in one tap. Twelve looks, from Kodak Gold to Polaroid."
                 img={`${V}/develop-polaroid.webp`}
                 alt="The PixCherry camera with the Polaroid look"
+                tone="dark"
               >
                 <ul className="mt-5 flex flex-wrap gap-2">
                   {LOOKS.map((l) => (
@@ -456,6 +460,7 @@ export default async function Home() {
                 text="Up to 3072 pixels on the long side. Tap any photo to zoom in, heart it or save it."
                 img={`${V}/wedding-viewer.webp`}
                 alt="A wedding photo open in the viewer, with hashtags and hearts"
+                tone="dark"
               />
             </div>
           </div>
@@ -516,7 +521,7 @@ export default async function Home() {
                   <PhoneShot
                     src={e.img}
                     alt={`The demo ${e.label.toLowerCase()} album`}
-                    className="mx-auto w-full max-w-[14rem] transition duration-300 group-hover:-translate-y-1.5 group-hover:shadow-cherry"
+                    className="mx-auto w-full max-w-[14rem] transition duration-300 group-hover:-translate-y-1.5"
                   />
                   <span className="mt-4 flex items-center justify-center gap-1.5 font-semibold text-ink transition group-hover:text-brand">
                     {e.label}

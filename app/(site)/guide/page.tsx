@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { DeskShot, PhoneShot } from "@/components/shot-frame";
+import { DeskShot, PhoneShot, type ShotTone } from "@/components/shot-frame";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { LinkButton } from "@/components/ui";
 
@@ -9,7 +9,7 @@ export const metadata = {
   description: "Set up your event album, share the QR code, and see how guests snap and share. A step-by-step guide for hosts and guests.",
 };
 
-type Step = { title: string; text: string[]; img: string; alt: string; kind: "phone" | "desk" };
+type Step = { title: string; text: string[]; img: string; alt: string; kind: "phone" | "desk"; tone?: ShotTone };
 
 const HOST: Step[] = [
   {
@@ -88,6 +88,7 @@ const GUEST: Step[] = [
     img: "/landing/guide-guest-join.webp",
     alt: "Join sheet with name and selfie",
     kind: "phone",
+    tone: "dim",
   },
   {
     title: "Snap or upload",
@@ -98,6 +99,7 @@ const GUEST: Step[] = [
     img: "/landing/guide-guest-camera.webp",
     alt: "PixCamera with the Kodak Gold film look",
     kind: "phone",
+    tone: "dark",
   },
   {
     title: "Enjoy the album together",
@@ -123,7 +125,7 @@ function Steps({ steps, start = 1 }: { steps: Step[]; start?: number }) {
             ))}
           </div>
           <div className={i % 2 ? "md:order-1" : ""}>
-            {s.kind === "phone" ? <PhoneShot src={s.img} alt={s.alt} className="mx-auto w-full max-w-[17rem]" /> : <DeskShot src={s.img} alt={s.alt} />}
+            {s.kind === "phone" ? <PhoneShot src={s.img} alt={s.alt} tone={s.tone} className="mx-auto w-full max-w-[17rem]" /> : <DeskShot src={s.img} alt={s.alt} />}
           </div>
         </li>
       ))}
