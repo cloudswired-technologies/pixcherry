@@ -14,9 +14,10 @@ export default async function Receipt({ params }: { params: Promise<{ id: string
   const user = await requireUser();
   const p = await one<{
     receipt_no: string; description: string; subtotal_cents: number; discount_cents: number; amount_cents: number; paid_at: Date;
-    event_name: string; email: string; name: string | null; user_id: string;
+    refund_cents: number | null; refunded_at: Date | null; event_name: string; email: string; name: string | null; user_id: string;
   }>(
-    `select p.receipt_no, p.description, p.subtotal_cents, p.discount_cents, p.amount_cents, p.paid_at, e.name as event_name, u.email, u.name, p.user_id
+    `select p.receipt_no, p.description, p.subtotal_cents, p.discount_cents, p.amount_cents, p.paid_at, p.refund_cents, p.refunded_at,
+       e.name as event_name, u.email, u.name, p.user_id
      from purchases p join events e on e.id = p.event_id join users u on u.id = p.user_id where p.id = $1 and p.status = 'paid'`,
     [id],
   );
@@ -67,6 +68,12 @@ export default async function Receipt({ params }: { params: Promise<{ id: string
               <td className="py-2">Total paid</td>
               <td className="py-2 text-right">{formatMoney(p.amount_cents)}</td>
             </tr>
+            {p.refund_cents && p.refunded_at ? (
+              <tr>
+                <td className="py-2">Refunded on {formatDateTime(p.refunded_at)}</td>
+                <td className="py-2 text-right">−{formatMoney(p.refund_cents)}</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
         <div className="mt-6 text-xs text-muted-foreground">Paid {formatDateTime(p.paid_at)}. This is a computer-generated receipt.</div>

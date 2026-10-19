@@ -31,6 +31,7 @@ export async function checkCode(_: LoginState, fd: FormData): Promise<LoginState
   const r = await verifyLoginCode(email, code);
   if (r === "invalid") return { step: "code", email, error: "That code isn't right. Check the latest email.", next };
   if (r === "expired") return { step: "email", email, error: "That code has expired. We'll send a new one.", next };
+  if (r === "suspended") return { step: "email", email, error: "This account is suspended. Email support@pixcherry.com if you think this is a mistake.", next };
   redirect(next);
 }
 

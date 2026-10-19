@@ -25,6 +25,8 @@ import {
   Target,
   UserRound,
   Users,
+  UsersRound,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -56,6 +58,8 @@ const ICONS = {
   demo: Sparkles,
   admin: Shield,
   account: UserRound,
+  organisers: UsersRound,
+  payments: Wallet,
 } satisfies Record<string, LucideIcon>;
 export type NavIcon = keyof typeof ICONS;
 export type NavItem = { href: string; label: string; icon: NavIcon; exact?: boolean; badge?: number; bottom?: boolean; group?: string };

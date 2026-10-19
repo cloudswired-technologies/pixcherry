@@ -97,17 +97,29 @@ export default async function AdminOverview() {
         {[
           { icon: Radio, label: "Live right now", value: s.events?.live ?? 0, tone: "text-ok" },
           { icon: PartyPopper, label: "Upcoming", value: s.events?.upcoming ?? 0, tone: "text-brand" },
-          { icon: UserPlus, label: "Organisers", value: `${s.users?.total ?? 0} (+${s.users?.n30 ?? 0})`, tone: "text-[#b45309]" },
+          { icon: UserPlus, label: "Organisers", value: `${s.users?.total ?? 0} (+${s.users?.n30 ?? 0})`, tone: "text-[#b45309]", href: "/admin/users" },
           { icon: HardDrive, label: `Storage · ${storageCostMyr(bytes)}/mo`, value: formatBytes(bytes), tone: "text-ink" },
-        ].map((x) => (
-          <div key={x.label} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-            <x.icon className={`size-5 shrink-0 ${x.tone}`} aria-hidden />
-            <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-muted-foreground">{x.label}</div>
-              <div className="text-lg font-extrabold">{x.value}</div>
+        ].map((x) => {
+          const inner = (
+            <>
+              <x.icon className={`size-5 shrink-0 ${x.tone}`} aria-hidden />
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-muted-foreground">{x.label}</div>
+                <div className="text-lg font-extrabold">{x.value}</div>
+              </div>
+            </>
+          );
+          const cls = "flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3";
+          return x.href ? (
+            <Link key={x.label} href={x.href} className={`${cls} hover:bg-muted/60`}>
+              {inner}
+            </Link>
+          ) : (
+            <div key={x.label} className={cls}>
+              {inner}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -163,7 +175,7 @@ export default async function AdminOverview() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="rounded-3xl p-6">
-          <Head title="Latest payments" href="/admin/events" />
+          <Head title="Latest payments" href="/admin/payments" />
           {s.payments.length ? (
             <ul className="divide-y divide-border">
               {s.payments.map((p) => (
@@ -171,7 +183,7 @@ export default async function AdminOverview() {
                   <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ok-soft text-ok">
                     <CircleDollarSign className="size-4" aria-hidden />
                   </span>
-                  <Link href={`/admin/events/${p.event_id}`} className="min-w-0 flex-1">
+                  <Link href={`/admin/payments/${p.id}`} className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{p.event}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {p.email} · {formatDateTime(p.paid_at)}
@@ -186,20 +198,22 @@ export default async function AdminOverview() {
           )}
         </Card>
         <Card className="rounded-3xl p-6">
-          <Head title="New organisers" />
+          <Head title="New organisers" href="/admin/users?status=new" />
           <ul className="divide-y divide-border">
             {s.signups.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 py-2.5">
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-bold uppercase text-brand">{(u.name ?? u.email).charAt(0)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{u.name ?? u.email}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {u.name ? `${u.email} · ` : ""}joined {formatDate(u.created_at)}
+              <li key={u.id}>
+                <Link href={`/admin/users/${u.id}`} className="flex items-center gap-3 py-2.5 hover:bg-muted/40">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-bold uppercase text-brand">{(u.name ?? u.email).charAt(0)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{u.name ?? u.email}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {u.name ? `${u.email} · ` : ""}joined {formatDate(u.created_at)}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {u.paid}/{u.events} paid
-                </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {u.paid}/{u.events} paid
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

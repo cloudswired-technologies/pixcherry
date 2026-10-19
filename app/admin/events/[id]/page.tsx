@@ -14,6 +14,7 @@ import { eventPhase } from "@/lib/limits";
 import { FEATURES, LIMITS, normaliseLimits } from "@/lib/plan-schema";
 import { listPlans } from "@/lib/plans";
 import { activateEvent, saveOverrides } from "../../actions";
+import { PaymentStatus } from "../../payments/bits";
 
 export const metadata = { title: "Event" };
 
@@ -25,8 +26,8 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
   const [owner, plans, purchases, status] = await Promise.all([
     one<{ email: string; name: string | null }>("select email, name from users where id = $1", [e.owner_id]),
     listPlans(false),
-    q<{ id: string; description: string; amount_cents: number; status: string; receipt_no: string | null; created_at: Date }>(
-      "select id, description, amount_cents, status, receipt_no, created_at from purchases where event_id = $1 order by created_at desc",
+    q<{ id: string; description: string; amount_cents: number; refund_cents: number | null; status: string; receipt_no: string | null; created_at: Date }>(
+      "select id, description, amount_cents, refund_cents, status, receipt_no, created_at from purchases where event_id = $1 order by created_at desc",
       [e.id],
     ),
     q<{ status: string; n: number }>("select status, count(*)::int as n from photos where event_id = $1 group by status", [e.id]),
@@ -35,7 +36,7 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
   const ov = e.overrides ?? {};
   const addons = (e.addon_totals ?? {}) as Record<string, number>;
   const cover = coverUrl(e);
-  const paid = purchases.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount_cents, 0);
+  const paid = purchases.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount_cents - (p.refund_cents ?? 0), 0);
 
   return (
     <div className="grid gap-6">
@@ -51,8 +52,10 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
             <PhaseBadge phase={eventPhase(e)} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {owner?.name ? `${owner.name} · ` : ""}
-            {owner?.email} · {formatRange(e.starts_at, e.ends_at)}
+            <Link href={`/admin/users/${e.owner_id}`} className="font-semibold text-brand hover:underline">
+              {owner?.name ?? owner?.email}
+            </Link>
+            {owner?.name ? ` · ${owner.email}` : ""} · {formatRange(e.starts_at, e.ends_at)}
           </p>
           <p className="text-sm text-muted-foreground">
             {e.plan_snapshot?.name ?? "No package yet"} · {paid ? `${formatMoney(paid)} paid` : "nothing paid"}
@@ -189,20 +192,20 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
         {purchases.length ? (
           <ul className="divide-y divide-border text-sm">
             {purchases.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{p.description}</span>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(p.created_at)}</span>
-                </span>
-                <span className="flex items-center gap-3">
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", p.status === "paid" ? "bg-ok-soft text-ok" : "bg-muted text-muted-foreground")}>{p.status}</span>
-                  <span className="font-semibold">{formatMoney(p.amount_cents)}</span>
-                  {p.receipt_no ? (
-                    <Link href={`/dashboard/receipts/${p.id}`} className="text-xs font-semibold text-brand underline">
-                      {p.receipt_no}
-                    </Link>
-                  ) : null}
-                </span>
+              <li key={p.id}>
+                <Link href={`/admin/payments/${p.id}`} className="-mx-2 flex flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-2.5 hover:bg-canvas/60">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{p.description}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateTime(p.created_at)}
+                      {p.receipt_no ? ` · ${p.receipt_no}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <PaymentStatus p={p} />
+                    <span className="font-semibold">{formatMoney(p.amount_cents)}</span>
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

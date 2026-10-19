@@ -22,6 +22,8 @@ export async function closeAccount(userId: string) {
       [userId],
       c,
     );
-    await q("insert into audit_log (actor_id, action, target, details) values ($1, 'account.closed', $1, $2)", [userId, JSON.stringify({ events: events.length })], c);
+    // Separate parameters: one $1 used as both uuid (actor_id) and text (target) is rejected by Postgres
+    // ("inconsistent types deduced for parameter $1"), which rolled the whole closing back.
+    await q("insert into audit_log (actor_id, action, target, details) values ($1, 'account.closed', $2, $3)", [userId, userId, JSON.stringify({ events: events.length })], c);
   });
 }

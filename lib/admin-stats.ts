@@ -8,9 +8,9 @@ const TZ = "Asia/Kuala_Lumpur";
 export async function adminOverview() {
   const [money, events, photos, guests, users, revDays, upDays, mix, live, payments, signups, top, queue, cron, deleting] = await Promise.all([
     one<{ rev30: number; revprev: number; revall: number; pay30: number }>(
-      `select coalesce(sum(amount_cents) filter (where paid_at > now() - interval '30 days'), 0)::int rev30,
-         coalesce(sum(amount_cents) filter (where paid_at <= now() - interval '30 days' and paid_at > now() - interval '60 days'), 0)::int revprev,
-         coalesce(sum(amount_cents), 0)::int revall,
+      `select coalesce(sum(amount_cents - coalesce(refund_cents, 0)) filter (where paid_at > now() - interval '30 days'), 0)::int rev30,
+         coalesce(sum(amount_cents - coalesce(refund_cents, 0)) filter (where paid_at <= now() - interval '30 days' and paid_at > now() - interval '60 days'), 0)::int revprev,
+         coalesce(sum(amount_cents - coalesce(refund_cents, 0)), 0)::int revall,
          count(*) filter (where paid_at > now() - interval '30 days')::int pay30
        from purchases where status = 'paid'`,
     ),
@@ -37,7 +37,7 @@ export async function adminOverview() {
     ),
     one<{ total: number; n30: number }>("select count(*)::int total, count(*) filter (where created_at > now() - interval '30 days')::int n30 from users"),
     q<{ label: string; value: number }>(
-      `select to_char(d, 'DD Mon') as label, coalesce(sum(p.amount_cents), 0)::int as value
+      `select to_char(d, 'DD Mon') as label, coalesce(sum(p.amount_cents - coalesce(p.refund_cents, 0)), 0)::int as value
        from generate_series((now() at time zone '${TZ}')::date - 29, (now() at time zone '${TZ}')::date, interval '1 day') d
        left join purchases p on p.status = 'paid' and (p.paid_at at time zone '${TZ}')::date = d::date
        group by d order by d`,

@@ -5,9 +5,11 @@ import { formatDateTime } from "@/lib/format";
 
 export const metadata = { title: "Logs" };
 
-export default async function Logs({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function Logs({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
   await requireAdmin();
-  const tab = (await searchParams).tab ?? "audit";
+  const sp = await searchParams;
+  const tab = sp.tab ?? "audit";
+  const term = (sp.q ?? "").trim().slice(0, 100);
   const tabs = [
     ["audit", "Admin & payments"],
     ["email", "Emails"],
@@ -15,15 +17,21 @@ export default async function Logs({ searchParams }: { searchParams: Promise<{ t
   ] as const;
   return (
     <div className="grid gap-6">
-      <PageHeader title="Logs" sub="Latest 200 entries." />
-      <div className="flex flex-wrap gap-2">
-        {tabs.map(([k, label]) => (
-          <LinkButton key={k} href={`/admin/logs?tab=${k}`} variant={tab === k ? "primary" : "outline"} size="sm">
-            {label}
-          </LinkButton>
-        ))}
+      <PageHeader title="Logs" sub={term ? `Latest 200 entries matching “${term}”.` : "Latest 200 entries."} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {tabs.map(([k, label]) => (
+            <LinkButton key={k} href={`/admin/logs?tab=${k}${term ? `&q=${encodeURIComponent(term)}` : ""}`} variant={tab === k ? "primary" : "outline"} size="sm">
+              {label}
+            </LinkButton>
+          ))}
+        </div>
+        <form className="w-full sm:w-72">
+          <input type="hidden" name="tab" value={tab} />
+          <input name="q" defaultValue={term} placeholder="Search email, action or id" aria-label="Search logs" className="h-10 w-full rounded-full border border-input bg-card px-4 text-sm outline-none focus:border-brand" />
+        </form>
       </div>
-      <Card className="overflow-x-auto p-0">{tab === "email" ? <EmailLog /> : tab === "webhook" ? <WebhookLog /> : <AuditLog />}</Card>
+      <Card className="overflow-x-auto p-0">{tab === "email" ? <EmailLog term={term} /> : tab === "webhook" ? <WebhookLog term={term} /> : <AuditLog term={term} />}</Card>
     </div>
   );
 }
@@ -31,9 +39,13 @@ export default async function Logs({ searchParams }: { searchParams: Promise<{ t
 const TH = "px-4 py-2 text-left text-xs font-medium text-muted-foreground";
 const TD = "px-4 py-2 align-top";
 
-async function AuditLog() {
+const like = (s: string) => `%${s.replace(/[%_\\]/g, "\\$&")}%`;
+
+async function AuditLog({ term }: { term: string }) {
   const rows = await q<{ id: number; action: string; target: string | null; details: unknown; created_at: Date; email: string | null }>(
-    "select a.id, a.action, a.target, a.details, a.created_at, u.email from audit_log a left join users u on u.id = a.actor_id order by a.id desc limit 200",
+    `select a.id, a.action, a.target, a.details, a.created_at, u.email from audit_log a left join users u on u.id = a.actor_id
+     ${term ? "where a.action ilike $1 or u.email ilike $1 or a.target ilike $1 or a.details::text ilike $1" : ""} order by a.id desc limit 200`,
+    term ? [like(term)] : [],
   );
   return (
     <table className="w-full min-w-[48rem] text-sm">
@@ -59,9 +71,10 @@ async function AuditLog() {
   );
 }
 
-async function EmailLog() {
+async function EmailLog({ term }: { term: string }) {
   const rows = await q<{ id: number; to_email: string; template: string; ok: boolean; error: string | null; created_at: Date }>(
-    "select * from email_log order by id desc limit 200",
+    `select * from email_log ${term ? "where to_email ilike $1 or template ilike $1" : ""} order by id desc limit 200`,
+    term ? [like(term)] : [],
   );
   return (
     <table className="w-full min-w-[40rem] text-sm">
@@ -87,8 +100,11 @@ async function EmailLog() {
   );
 }
 
-async function WebhookLog() {
-  const rows = await q<{ id: number; source: string; ref: string | null; ok: boolean; note: string | null; created_at: Date }>("select * from webhook_log order by id desc limit 200");
+async function WebhookLog({ term }: { term: string }) {
+  const rows = await q<{ id: number; source: string; ref: string | null; ok: boolean; note: string | null; created_at: Date }>(
+    `select * from webhook_log ${term ? "where ref ilike $1 or note ilike $1" : ""} order by id desc limit 200`,
+    term ? [like(term)] : [],
+  );
   return (
     <table className="w-full min-w-[40rem] text-sm">
       <thead className="bg-muted">

@@ -39,7 +39,7 @@ export const currentUser = cache(async (): Promise<User | null> => {
   const s = unsign<Session>((await cookies()).get(COOKIE)?.value);
   if (!s || s.exp < Date.now()) return null;
   return one<User>(
-    "select id, email, name, phone, is_admin from users where id = $1 and session_version = $2",
+    "select id, email, name, phone, is_admin from users where id = $1 and session_version = $2 and suspended_at is null",
     [s.uid, s.v],
   );
 });
@@ -87,7 +87,7 @@ export async function sendLoginCode(email: string) {
 }
 
 /** Checks the code; on success creates the user if needed and sets the session cookie. */
-export async function verifyLoginCode(email: string, code: string): Promise<"ok" | "invalid" | "expired"> {
+export async function verifyLoginCode(email: string, code: string): Promise<"ok" | "invalid" | "expired" | "suspended"> {
   const row = await one<{ id: string; code_hash: string; attempts: number; expired: boolean }>(
     `select id, code_hash, attempts, expires_at < now() as expired from login_codes
      where email = $1 and used_at is null order by created_at desc limit 1`,
@@ -100,12 +100,13 @@ export async function verifyLoginCode(email: string, code: string): Promise<"ok"
     return "invalid";
   }
   await q("update login_codes set used_at = now() where id = $1", [row.id]);
-  const user = await one<{ id: string; session_version: number }>(
+  const user = await one<{ id: string; session_version: number; suspended: boolean }>(
     `insert into users (email, is_admin, last_login_at) values ($1, $2, now())
      on conflict (email) do update set last_login_at = now(), is_admin = users.is_admin or excluded.is_admin
-     returning id, session_version`,
+     returning id, session_version, suspended_at is not null as suspended`,
     [email, adminEmails().includes(email)],
   );
+  if (user!.suspended) return "suspended";
   const session: Session = { uid: user!.id, v: user!.session_version, exp: Date.now() + SESSION_DAYS * 86400_000 };
   (await cookies()).set(COOKIE, sign(session), {
     httpOnly: true,
