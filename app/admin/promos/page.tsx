@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/action-form";
+import { Confirm } from "@/components/confirm";
 import { Badge, Card, Field, Input, PageHeader, Select } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { q } from "@/lib/db";
@@ -7,6 +8,24 @@ import { listPlans } from "@/lib/plans";
 import { savePromo, togglePromo } from "../actions";
 
 export const metadata = { title: "Promo codes" };
+
+/** Status + switch. Turning a code off asks first (people may be about to pay with it). */
+function PromoToggle({ id, code, active }: { id: string; code: string; active: boolean }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-2">
+      {active ? <Badge tone="ok">Active</Badge> : <Badge>Off</Badge>}
+      {active ? (
+        <Confirm action={togglePromo.bind(null, id, false)} title={`Turn off ${code}?`} message="Anyone using it at checkout from now on gets the full price." confirm="Turn off" className="min-h-9 px-1 text-xs font-semibold underline">
+          Turn off
+        </Confirm>
+      ) : (
+        <form action={togglePromo.bind(null, id, true)}>
+          <button className="min-h-9 px-1 text-xs font-semibold underline">Turn on</button>
+        </form>
+      )}
+    </span>
+  );
+}
 
 export default async function Promos() {
   await requireAdmin();
@@ -55,7 +74,22 @@ export default async function Promos() {
         </ActionForm>
       </Card>
       <Card className="overflow-x-auto p-0">
-        <table className="w-full min-w-[40rem] text-sm">
+        <ul className="divide-y divide-border md:hidden">
+          {promos.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-mono text-sm font-semibold">{p.code}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {p.percent_off ? `${p.percent_off}% off` : `${formatMoney(p.amount_off_cents ?? 0)} off`} · {p.plan_name ?? "any package"} · used {p.used_count}
+                  {p.max_uses ? `/${p.max_uses}` : ""}
+                  {p.expires_at ? ` · until ${formatDate(p.expires_at)}` : ""}
+                </span>
+              </span>
+              <PromoToggle id={p.id} code={p.code} active={p.is_active} />
+            </li>
+          ))}
+        </ul>
+        <table className="hidden w-full min-w-[40rem] text-sm md:table">
           <thead className="bg-muted text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-4 py-2">Code</th>
@@ -78,10 +112,7 @@ export default async function Promos() {
                 </td>
                 <td className="px-4 py-2">{p.expires_at ? formatDate(p.expires_at) : "—"}</td>
                 <td className="px-4 py-2 text-right">
-                  <form action={togglePromo.bind(null, p.id, !p.is_active)} className="inline-flex items-center gap-2">
-                    {p.is_active ? <Badge tone="ok">Active</Badge> : <Badge>Off</Badge>}
-                    <button className="text-xs font-semibold underline">{p.is_active ? "Turn off" : "Turn on"}</button>
-                  </form>
+                  <PromoToggle id={p.id} code={p.code} active={p.is_active} />
                 </td>
               </tr>
             ))}

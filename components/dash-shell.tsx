@@ -60,7 +60,15 @@ const ICONS = {
   account: UserRound,
   organisers: UsersRound,
   payments: Wallet,
+  plus: Plus,
 } satisfies Record<string, LucideIcon>;
+
+/** Bottom bar on phones outside an event: the organiser's home pages. */
+const HOME_BOTTOM: NavItem[] = [
+  { href: "/dashboard", label: "My events", icon: "events", exact: true },
+  { href: "/dashboard/events/new", label: "New event", icon: "plus" },
+  { href: "/dashboard/account", label: "Account", icon: "account" },
+];
 export type NavIcon = keyof typeof ICONS;
 export type NavItem = { href: string; label: string; icon: NavIcon; exact?: boolean; badge?: number; bottom?: boolean; group?: string };
 export type ShellEvent = { id: string; name: string; phase: string; phaseTone: "ok" | "brand" | "warn" | "neutral" | "danger"; cover: string | null; review: number; guestUrl: string | null };
@@ -101,7 +109,7 @@ export function DashShell({
   const eventId = path.match(/^\/dashboard\/events\/([0-9a-f-]{36})/)?.[1] ?? null;
   const current = eventId ? (events?.find((e) => e.id === eventId) ?? null) : null;
   const nav: NavItem[] = admin ?? (eventId ? eventNav(current ?? { id: eventId, review: 0 }, current?.features ?? { missions: true, wishes: true }) : []);
-  const bottom = nav.filter((i) => i.bottom);
+  const bottom = admin || eventId ? nav.filter((i) => i.bottom) : HOME_BOTTOM;
 
   useEffect(() => {
     document.body.style.overflow = drawer ? "hidden" : "";
@@ -143,12 +151,13 @@ export function DashShell({
       </aside>
 
       <div className="lg:pl-[264px]">
-        <main className={cn("mx-auto w-full max-w-6xl px-4 pt-5 lg:px-8 lg:pt-8", bottom.length ? "pb-28 lg:pb-12" : "pb-12")}>{children}</main>
+        {/* Full width on desktop (no max-width): side menu fixed, content uses the rest of the screen. */}
+        <main className={cn("w-full px-4 pt-5 lg:px-8 lg:pt-8 2xl:px-12", bottom.length ? "pb-28 lg:pb-12" : "pb-12")}>{children}</main>
       </div>
 
       {bottom.length ? (
         <nav aria-label="Quick menu" className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-          <ul className="mx-auto grid max-w-md grid-cols-4">
+          <ul className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${bottom.length + 1}, minmax(0, 1fr))` }}>
             {bottom.map((i) => {
               const Icon = ICONS[i.icon];
               const on = isOn(path, i);

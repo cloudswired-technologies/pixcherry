@@ -27,7 +27,7 @@ export default async function Account() {
 
       <section className="flex flex-wrap items-center gap-4 rounded-3xl border border-border bg-card p-6 shadow-soft">
         <span className="grid size-16 place-items-center rounded-full bg-brand text-2xl font-extrabold uppercase text-white">{(user.name ?? user.email).charAt(0)}</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-48">
           <div className="truncate text-xl font-extrabold">{user.name ?? user.email.split("@")[0]}</div>
           <div className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
             <Mail className="size-4" aria-hidden /> {user.email}
@@ -37,7 +37,7 @@ export default async function Account() {
             {extra?.last_login_at ? ` · last login ${formatDate(extra.last_login_at)}` : ""}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid w-full grid-cols-3 gap-2 text-center sm:w-auto">
           {[
             { n: counts?.events ?? 0, l: "events" },
             { n: counts?.paid ?? 0, l: "active" },

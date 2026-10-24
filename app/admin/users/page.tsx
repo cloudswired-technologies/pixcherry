@@ -38,7 +38,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
         </form>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={UsersRound} label="Organisers" value={(counts?.all ?? 0).toLocaleString("en-MY")} sub={<span className="text-xs text-muted-foreground">{totals?.active30 ?? 0} signed in this month</span>} />
         <Kpi icon={UserPlus} label="New · 30 days" value={String(totals?.n30 ?? 0)} sub={<Delta now={totals?.n30 ?? 0} prev={totals?.nprev ?? 0} />} tone="amber" />
         <Kpi

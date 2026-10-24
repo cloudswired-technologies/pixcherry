@@ -4,10 +4,10 @@ import { requireAdmin } from "@/lib/auth";
 export const metadata = { title: { default: "Admin", template: "%s · Admin · PixCherry" }, robots: { index: false, follow: false } };
 
 const NAV: NavItem[] = [
-  { href: "/admin", label: "Overview", icon: "gauge", exact: true, group: "Insights" },
-  { href: "/admin/events", label: "Events", icon: "events", group: "Business" },
-  { href: "/admin/users", label: "Organisers", icon: "organisers", group: "Business" },
-  { href: "/admin/payments", label: "Payments", icon: "payments", group: "Business" },
+  { href: "/admin", label: "Overview", icon: "gauge", exact: true, bottom: true, group: "Insights" },
+  { href: "/admin/events", label: "Events", icon: "events", bottom: true, group: "Business" },
+  { href: "/admin/users", label: "Organisers", icon: "organisers", bottom: true, group: "Business" },
+  { href: "/admin/payments", label: "Payments", icon: "payments", bottom: true, group: "Business" },
   { href: "/admin/plans", label: "Packages & add-ons", icon: "plans", group: "Business" },
   { href: "/admin/promos", label: "Promo codes", icon: "promos", group: "Business" },
   { href: "/admin/demos", label: "Demo albums", icon: "demo", group: "Business" },

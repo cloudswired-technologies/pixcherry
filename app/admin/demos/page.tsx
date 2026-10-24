@@ -51,14 +51,15 @@ export default async function DemosAdmin() {
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl p-3 hover:bg-muted/60">
                 {c.cover ? <img src={c.cover} alt="" className="h-12 w-20 rounded-xl object-cover" /> : <div className="h-12 w-20 rounded-xl bg-muted" />}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-bold">
+                <div className="min-w-0 flex-1 basis-40">
+                  <div className="line-clamp-2 font-bold sm:truncate">
                     {c.emoji} {c.name}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {c.photoCount} photos · visitors now: {n?.photos ?? 0} photos, {n?.guests ?? 0} phones
                   </div>
                 </div>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                 <a href={guestUrl(c.liveSlug)} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-semibold hover:bg-muted">
                   Open <ExternalLink className="size-3.5" aria-hidden />
                 </a>
@@ -75,6 +76,7 @@ export default async function DemosAdmin() {
                 >
                   <Trash2 className="size-3.5" aria-hidden /> Clear
                 </Confirm>
+                </div>
               </div>
             );
           })}

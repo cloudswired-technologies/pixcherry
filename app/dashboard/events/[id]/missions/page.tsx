@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowDown, ArrowUp, Sparkles, Trash2 } from "lucide-react";
+import { RowMenu, menuItem } from "@/components/row-menu";
 import { ActionForm } from "@/components/action-form";
 import { Confirm } from "@/components/confirm";
 import { EmojiPicker } from "@/components/emoji-picker";
@@ -61,26 +62,27 @@ export default async function Missions({ params }: { params: Promise<{ id: strin
                           {m.count} photo{m.count === 1 ? "" : "s"} · {b?.total ?? 0} guest{b?.total === 1 ? "" : "s"} completed
                         </span>
                       </span>
-                      <form action={moveMission.bind(null, e.id, m.id, -1)}>
-                        <button disabled={i === 0} className="grid size-8 place-items-center rounded-full hover:bg-muted disabled:opacity-30" aria-label="Move up">
-                          <ArrowUp className="size-4" aria-hidden />
-                        </button>
-                      </form>
-                      <form action={moveMission.bind(null, e.id, m.id, 1)}>
-                        <button disabled={i === missions.length - 1} className="grid size-8 place-items-center rounded-full hover:bg-muted disabled:opacity-30" aria-label="Move down">
-                          <ArrowDown className="size-4" aria-hidden />
-                        </button>
-                      </form>
-                      <Confirm
-                        action={deleteMission.bind(null, e.id, m.id)}
-                        title="Delete this mission?"
-                        message={m.count ? `Its ${m.count} photo${m.count === 1 ? "" : "s"} stay in the album, just without the mission.` : "Guests won't see it any more."}
-                        confirm="Delete mission"
-                        label="Delete mission"
-                        className="grid size-8 place-items-center rounded-full text-danger hover:bg-danger-soft"
-                      >
-                        <Trash2 className="size-4" aria-hidden />
-                      </Confirm>
+                      <RowMenu label={`Actions for ${m.title}`}>
+                        <form action={moveMission.bind(null, e.id, m.id, -1)}>
+                          <button disabled={i === 0} className={menuItem}>
+                            <ArrowUp className="size-4" aria-hidden /> Move up
+                          </button>
+                        </form>
+                        <form action={moveMission.bind(null, e.id, m.id, 1)}>
+                          <button disabled={i === missions.length - 1} className={menuItem}>
+                            <ArrowDown className="size-4" aria-hidden /> Move down
+                          </button>
+                        </form>
+                        <Confirm
+                          action={deleteMission.bind(null, e.id, m.id)}
+                          title="Delete this mission?"
+                          message={m.count ? `Its ${m.count} photo${m.count === 1 ? "" : "s"} stay in the album, just without the mission.` : "Guests won't see it any more."}
+                          confirm="Delete mission"
+                          className={`${menuItem} text-danger hover:bg-danger-soft`}
+                        >
+                          <Trash2 className="size-4" aria-hidden /> Delete mission
+                        </Confirm>
+                      </RowMenu>
                     </div>
                     {b?.people.length ? (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-11 text-xs">

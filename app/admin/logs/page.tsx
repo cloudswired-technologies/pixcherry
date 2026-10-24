@@ -2,6 +2,7 @@ import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { q } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
+import { ACTION_LABEL } from "@/lib/admin-data";
 
 export const metadata = { title: "Logs" };
 
@@ -48,7 +49,9 @@ async function AuditLog({ term }: { term: string }) {
     term ? [like(term)] : [],
   );
   return (
-    <table className="w-full min-w-[48rem] text-sm">
+    <>
+    <MobileRows rows={rows.map((r) => ({ key: r.id, when: r.created_at, title: ACTION_LABEL[r.action] ?? r.action, sub: r.email ?? "system", extra: JSON.stringify(r.details) }))} />
+    <table className="hidden w-full min-w-[48rem] text-sm md:table">
       <thead className="bg-muted">
         <tr>
           <th className={TH}>When</th>
@@ -68,6 +71,7 @@ async function AuditLog({ term }: { term: string }) {
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 
@@ -77,7 +81,17 @@ async function EmailLog({ term }: { term: string }) {
     term ? [like(term)] : [],
   );
   return (
-    <table className="w-full min-w-[40rem] text-sm">
+    <>
+    <MobileRows
+      rows={rows.map((r) => ({
+        key: r.id,
+        when: r.created_at,
+        title: r.template,
+        sub: r.to_email,
+        badge: r.ok ? <Badge tone="ok">Sent</Badge> : <Badge tone={r.error === "not_configured" ? "neutral" : "danger"}>{r.error ?? "Failed"}</Badge>,
+      }))}
+    />
+    <table className="hidden w-full min-w-[40rem] text-sm md:table">
       <thead className="bg-muted">
         <tr>
           <th className={TH}>When</th>
@@ -97,6 +111,7 @@ async function EmailLog({ term }: { term: string }) {
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 
@@ -106,7 +121,11 @@ async function WebhookLog({ term }: { term: string }) {
     term ? [like(term)] : [],
   );
   return (
-    <table className="w-full min-w-[40rem] text-sm">
+    <>
+    <MobileRows
+      rows={rows.map((r) => ({ key: r.id, when: r.created_at, title: r.ref ?? "—", sub: "CHIP callback", badge: <Badge tone={r.ok ? "ok" : "danger"}>{r.note ?? (r.ok ? "ok" : "failed")}</Badge> }))}
+    />
+    <table className="hidden w-full min-w-[40rem] text-sm md:table">
       <thead className="bg-muted">
         <tr>
           <th className={TH}>When</th>
@@ -126,5 +145,27 @@ async function WebhookLog({ term }: { term: string }) {
         ))}
       </tbody>
     </table>
+    </>
+  );
+}
+
+/** Phones: one compact row per log entry instead of a table that scrolls sideways. */
+function MobileRows({ rows }: { rows: { key: number; when: Date; title: string; sub: string; badge?: React.ReactNode; extra?: string }[] }) {
+  if (!rows.length) return <p className="px-4 py-8 text-center text-sm text-muted-foreground md:hidden">Nothing logged yet.</p>;
+  return (
+    <ul className="divide-y divide-border md:hidden">
+      {rows.map((r) => (
+        <li key={r.key} className="flex items-start gap-3 px-4 py-3">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{r.title}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {formatDateTime(r.when)} · {r.sub}
+            </span>
+            {r.extra && r.extra !== "{}" ? <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">{r.extra}</span> : null}
+          </span>
+          {r.badge ? <span className="shrink-0">{r.badge}</span> : null}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -36,7 +36,7 @@ export default async function AdminPayments({ searchParams }: { searchParams: Pr
         </a>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={CircleDollarSign} label="This month" value={rm(t?.this_month ?? 0)} sub={<Delta now={t?.this_month ?? 0} prev={t?.last_month ?? 0} suffix="vs last month" />} spark={stats.months.map((m) => m.value)} />
         <Kpi icon={ReceiptText} label="Paid orders this month" value={String(t?.orders_month ?? 0)} sub={<span className="text-xs text-muted-foreground">average order {rm(t?.avg_order ?? 0)}</span>} tone="amber" />
         <Kpi icon={HandCoins} label="All time" value={rm(t?.all_time ?? 0)} sub={<span className="text-xs text-muted-foreground">{rm(t?.discounts ?? 0)} given in promo discounts</span>} tone="ok" />

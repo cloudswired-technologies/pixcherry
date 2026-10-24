@@ -92,9 +92,23 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
               const cover = coverUrl(e);
               return (
                 <li key={e.id}>
+                  <Link href={`/admin/events/${e.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas/60 lg:hidden">
+                    {cover ? <img src={cover} alt="" className="size-11 shrink-0 rounded-xl object-cover" /> : <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft">📸</span>}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{e.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {formatDate(e.starts_at)} · {e.plan ?? "no package"} · {e.photo_count.toLocaleString("en-MY")} photos · {e.guest_count} guests
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">{e.email}</span>
+                    </span>
+                    <span className="grid shrink-0 justify-items-end gap-1">
+                      <PhaseBadge phase={eventPhase(e)} />
+                      <span className="text-xs font-semibold">{e.paid_cents ? formatMoney(e.paid_cents) : ""}</span>
+                    </span>
+                  </Link>
                   <Link
                     href={`/admin/events/${e.id}`}
-                    className="grid gap-2 px-5 py-3.5 hover:bg-canvas/60 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1.4fr)_minmax(0,1fr)_repeat(3,minmax(0,0.7fr))_minmax(0,0.9fr)] lg:items-center lg:gap-3"
+                    className="hidden gap-3 px-5 py-3.5 hover:bg-canvas/60 lg:grid lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1.4fr)_minmax(0,1fr)_repeat(3,minmax(0,0.7fr))_minmax(0,0.9fr)] lg:items-center"
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       {cover ? <img src={cover} alt="" className="size-11 shrink-0 rounded-xl object-cover" /> : <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft">📸</span>}

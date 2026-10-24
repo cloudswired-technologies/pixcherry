@@ -48,16 +48,17 @@ export function Kpi({
 }) {
   const chip = { brand: "bg-brand-soft text-brand", ok: "bg-ok-soft text-ok", amber: "bg-[#fff1d6] text-[#b45309]", ink: "bg-muted text-ink" }[tone];
   return (
-    <div className="flex flex-col gap-2 rounded-3xl border border-border bg-card p-5 shadow-soft">
-      <div className="flex items-center gap-2.5">
-        <span className={cn("grid size-9 place-items-center rounded-xl", chip)}>
-          <Icon className="size-[18px]" aria-hidden />
+    // Compact on phones (two per row), roomier from sm up.
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft sm:gap-2 sm:rounded-3xl sm:p-5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+        <span className={cn("grid size-7 shrink-0 place-items-center rounded-lg sm:size-9 sm:rounded-xl", chip)}>
+          <Icon className="size-4 sm:size-[18px]" aria-hidden />
         </span>
-        <span className="text-sm font-semibold text-muted-foreground">{label}</span>
+        <span className="truncate text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
       </div>
-      <div className="text-3xl font-extrabold tracking-tight">{value}</div>
-      {sub ? <div>{sub}</div> : null}
-      {spark ? <Sparkline values={spark} /> : null}
+      <div className="truncate text-xl font-extrabold tracking-tight sm:text-3xl">{value}</div>
+      {sub ? <div className="min-w-0 text-[11px] leading-snug sm:text-xs [&_*]:text-[inherit]">{sub}</div> : null}
+      {spark ? <Sparkline values={spark} className="hidden sm:block" /> : null}
     </div>
   );
 }

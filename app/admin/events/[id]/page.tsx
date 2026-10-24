@@ -78,7 +78,7 @@ export default async function AdminEvent({ params }: { params: Promise<{ id: str
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={Camera} label="Photos" value={e.photo_count.toLocaleString("en-MY")} sub={<span className="text-xs text-muted-foreground">{status.map((s) => `${s.n} ${s.status}`).join(" · ") || "none yet"}</span>} />
         <Kpi icon={Users} label="Guests" value={`${e.guest_count} / ${e.cfg.limits.max_guests}`} tone="amber" />
         <Kpi icon={HardDrive} label="Storage" value={formatBytes(Number(e.bytes_used))} tone="ink" />

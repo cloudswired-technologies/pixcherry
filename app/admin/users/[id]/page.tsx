@@ -75,7 +75,7 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
       ) : null}
       {closed ? <Notice>This account was closed. Personal details were removed; payments and receipts are kept for the accounts.</Notice> : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={PartyPopper} label="Events" value={`${u.paid_events} paid`} sub={<span className="text-xs text-muted-foreground">{u.events} created in all</span>} />
         <Kpi icon={CircleDollarSign} label="Spent" value={formatMoney(u.spent)} sub={<span className="text-xs text-muted-foreground">{refunds ? `after ${formatMoney(refunds)} refunded` : `${payments.filter((p) => p.status === "paid").length} payments`}</span>} tone="ok" />
         <Kpi icon={Camera} label="Photos" value={(totals?.photos ?? 0).toLocaleString("en-MY")} sub={<span className="text-xs text-muted-foreground">{(totals?.guests ?? 0).toLocaleString("en-MY")} guests joined</span>} tone="amber" />
